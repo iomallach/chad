@@ -1,0 +1,1 @@
+- Future: server sends a few bytes telling how much bytes are the message and then how many bytes is the sender. The rest is the number of connected clients
