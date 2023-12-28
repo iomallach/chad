@@ -133,7 +133,7 @@ impl Server {
                     println!("Connection from {}", addr);
                     if let Ok(token) = self.register_client(stream) {
                         println!("Accepted connection from {} with token {}", addr, <Token as Into<usize>>::into(token));
-                        self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"6system***Welcome to Chad!***").expect("Failed to write");
+                        self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"\x06system***Welcome to Chad!***").expect("Failed to write");
                     } else {
                         eprintln!("Failed to register client: {}", addr);
                     }
@@ -159,7 +159,7 @@ impl Server {
                 },
                 Ok(n) => {
                     println!("Read {} bytes from socket {:?} : {} saying {}", n, token, socket.login_name, String::from_utf8_lossy(&buffer));
-                    Self::broadcast_message(&token, &buffer, &mut clients)
+                    Self::broadcast_message(&socket.login_name.clone(), &buffer[0..n], &mut clients)
                 },
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 },
@@ -168,14 +168,13 @@ impl Server {
         }
     }
 
-    fn broadcast_message(from: &Token, message: &[u8], across: &mut HashMap<Token, Client>) {
+    fn broadcast_message(from: &str, message: &[u8], across: &mut HashMap<Token, Client>) {
         across.iter().for_each(|(tok, client)| {
             let mut stream = &client.stream;
-            let sender = across.get(tok).unwrap();
             let mut buffer: Vec<u8> = Vec::new();
-            let len_byte: u8 = sender.login_name.len() as u8;
+            let len_byte: u8 = from.len() as u8;
             buffer.push(len_byte);
-            let sender_name_bytes = sender.login_name.as_bytes().to_owned();
+            let sender_name_bytes = from.as_bytes();
             buffer.extend(sender_name_bytes);
             buffer.extend(message);
 
@@ -190,6 +189,7 @@ impl Server {
 
 
 fn main() -> Result<(), ()> {
+    println!("{:?} {:?} {:?} {:?}", b"6", b"7", b"8", b"9");
     println!("Starting TCP server at {}", "127.0.0.1:8080");
     let mut server = Server::new("127.0.0.1:8080", 128).map_err(|e| {
         eprintln!("Failed to create server: {}", e);

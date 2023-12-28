@@ -15,6 +15,7 @@ mod clientrs;
 mod chat;
 mod draw;
 mod parser;
+mod message;
 
 fn fetch_updates(stdout: &mut Stdout, stream: &mut TcpStream) -> Result<(), Box<dyn Error>> {
     let mut buf: [u8; 8192] = [0; 8 * 1024];
@@ -41,27 +42,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         match read()? {
             Event::Key(event) => {
                 if let Some(stream) = &mut client.stream {
-                    let mut first_byte: [u8; 1] = [0; 1];
-                    let mut buf: [u8; 8192] = [0; 8 * 1024];
-                    match stream.read_exact(&mut first_byte) {
-                        Ok(_) => {},
-                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
-                        _ => panic!("Something went wrong"),
-                    }
-                    let mut name: Vec<u8> = Vec::with_capacity(first_byte[0] as usize);
-                    match stream.read(&mut name) {
-                        Ok(_) => {},
-                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
-                        e => { panic!("Unexpected error {:?}", e) }
-                    }
+                    let mut buf: [u8; 4096] = [0; 4 * 1024];
                     match stream.read(&mut buf) {
                         Ok(0) => {},
                         Ok(n) => {
-                            let mut message = String::new();
-                            message.extend(name.iter().map(|e| *e as char));
-                            message.extend(" says ".chars());
-                            message.extend(std::str::from_utf8(&buf[..n]).unwrap().chars());
-                            client.chat_log.put_line(message);
+                            hint(&mut stdout, &client.window, &format!("Got {} bytes", n))?;
+                            let mut buf_iter = buf.iter();
+                            let name_length = buf_iter.next().unwrap();
+                            let delim: Vec<u8> = vec![32, 58, 32];
+                            let msg_sender = buf_iter.clone().cloned().take(*name_length as usize).chain(delim);
+                            let msg_itself = buf_iter.cloned().skip(*name_length as usize).take_while(|e| *e != 0);
+                            let msg: Vec<u8> = msg_sender.chain(msg_itself).collect();
+                            client.chat_log.put_line(std::str::from_utf8(&msg).unwrap().to_string());
                         },
                         Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
                         e => { panic!("Unexpected error {:?}", e)},
