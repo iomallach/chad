@@ -133,7 +133,7 @@ impl Server {
                     println!("Connection from {}", addr);
                     if let Ok(token) = self.register_client(stream) {
                         println!("Accepted connection from {} with token {}", addr, <Token as Into<usize>>::into(token));
-                        self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"***Welcome to Chad!***").expect("Failed to write");
+                        self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"6system***Welcome to Chad!***").expect("Failed to write");
                     } else {
                         eprintln!("Failed to register client: {}", addr);
                     }
@@ -171,7 +171,17 @@ impl Server {
     fn broadcast_message(from: &Token, message: &[u8], across: &mut HashMap<Token, Client>) {
         across.iter().for_each(|(tok, client)| {
             let mut stream = &client.stream;
-            write!(&mut stream, "{}", String::from_utf8_lossy(message)).expect("Failed to broadcast");
+            let sender = across.get(tok).unwrap();
+            let mut buffer: Vec<u8> = Vec::new();
+            let len_byte: u8 = sender.login_name.len() as u8;
+            buffer.push(len_byte);
+            let sender_name_bytes = sender.login_name.as_bytes().to_owned();
+            buffer.extend(sender_name_bytes);
+            buffer.extend(message);
+
+            stream.write(&buffer).expect("Failed to broadcast");
+            stream.flush().expect("Failed to flush");
+            // write!(&mut stream, "{}", String::from_utf8_lossy(message)).expect("Failed to broadcast");
             // if tok != from {
             // }
         })

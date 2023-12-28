@@ -41,11 +41,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         match read()? {
             Event::Key(event) => {
                 if let Some(stream) = &mut client.stream {
+                    let mut first_byte: [u8; 1] = [0; 1];
                     let mut buf: [u8; 8192] = [0; 8 * 1024];
+                    match stream.read_exact(&mut first_byte) {
+                        Ok(_) => {},
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
+                        _ => panic!("Something went wrong"),
+                    }
+                    let mut name: Vec<u8> = Vec::with_capacity(first_byte[0] as usize);
+                    match stream.read(&mut name) {
+                        Ok(_) => {},
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
+                        e => { panic!("Unexpected error {:?}", e) }
+                    }
                     match stream.read(&mut buf) {
                         Ok(0) => {},
                         Ok(n) => {
-                            client.chat_log.put_line(std::str::from_utf8(&buf[..n]).unwrap().to_owned());
+                            let mut message = String::new();
+                            message.extend(name.iter().map(|e| *e as char));
+                            message.extend(" says ".chars());
+                            message.extend(std::str::from_utf8(&buf[..n]).unwrap().chars());
+                            client.chat_log.put_line(message);
                         },
                         Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
                         e => { panic!("Unexpected error {:?}", e)},
