@@ -1,3 +1,6 @@
+extern crate shared;
+use shared::Message;
+use shared::{read_message, send_message};
 use chrono::DateTime;
 use chrono::Local;
 use mio::Poll;
@@ -13,6 +16,7 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::time::Duration;
 use std::cell::RefCell;
 
@@ -76,6 +80,11 @@ impl Server {
         Token(self.next_socket_id.borrow().0)
     }
 
+    fn read_message(&self, stream: &mut TcpStream) -> Message {
+        let msg = read_message(stream);
+        Message::from_str(&msg).expect("No issues here")
+    }
+
     fn register_listener(&mut self) -> Result<(), Box<dyn Error>> {
         self.poll.registry().register(&mut self.listener, Self::LISTENER, Interest::READABLE)?;
         Ok(())
@@ -83,27 +92,10 @@ impl Server {
 
     fn register_client(&self, mut stream: TcpStream) -> Result<Token, Box<dyn Error>> {
         let token = self.issue_token();
-        let mut login_buf: [u8; 255] = [0; 255];
         
-        let name = match stream.read(&mut login_buf) {
-            Ok(0) => {
-                eprintln!("Read 0 bytes, no login information provided");
-                None
-            },
-            Ok(n) => {
-                let name = std::str::from_utf8(&login_buf[..n]).expect("Reading name failed");
-                Some(name.to_owned())
-            }
-            Err(e) => {
-                eprintln!("Failure on handshake {}", e);
-                None
-            }
-        };
+        let message = self.read_message(&mut stream);
         self.poll.registry().register(&mut stream, token, Interest::READABLE.add(Interest::WRITABLE))?;
-        match name {
-            None => self.clients.borrow_mut().insert(token, Client::new(stream, "".to_owned())),
-            Some(c) => self.clients.borrow_mut().insert(token, Client::new(stream, c))
-        };
+        self.clients.borrow_mut().insert(token, Client::new(stream, message.username));
         Ok(token)
     }
 
@@ -133,7 +125,9 @@ impl Server {
                     println!("Connection from {}", addr);
                     if let Ok(token) = self.register_client(stream) {
                         println!("Accepted connection from {} with token {}", addr, <Token as Into<usize>>::into(token));
-                        self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"\x06system***Welcome to Chad!***").expect("Failed to write");
+                        let system_msg = Message::new("System", Some(self.clients.borrow().len()), Some("***WELCOME TO CHAD***")).to_string();
+                        send_message(system_msg.as_str(), &mut self.clients.borrow_mut().get_mut(&token).unwrap().stream).expect("Failed to write");
+                        // self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"\x06system***Welcome to Chad!***").expect("Failed to write");
                     } else {
                         eprintln!("Failed to register client: {}", addr);
                     }
@@ -149,7 +143,7 @@ impl Server {
     fn handle_stream(&self, token: Token) {
         let mut clients = self.clients.borrow_mut();
         if let Some(socket) = clients.get_mut(&token) {
-            let addr = socket.stream.local_addr().expect("Failed to get address");
+            let addr = socket.stream.peer_addr().expect("Failed to get address");
             println!("Got event on socket {:?} and address {} from {}", token, addr, socket.login_name);
             let mut buffer = [0; 8 * 1024];
             match socket.stream.read(&mut buffer) {
@@ -189,7 +183,6 @@ impl Server {
 
 
 fn main() -> Result<(), ()> {
-    println!("{:?} {:?} {:?} {:?}", b"6", b"7", b"8", b"9");
     println!("Starting TCP server at {}", "127.0.0.1:8080");
     let mut server = Server::new("127.0.0.1:8080", 128).map_err(|e| {
         eprintln!("Failed to create server: {}", e);

@@ -1,5 +1,5 @@
 [package]
-name = "server"
+name = "shared"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,5 +7,3 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.31"
-mio = { version = "0.8.10", features = ["net", "os-poll"] }
-shared = { path = "../shared"}

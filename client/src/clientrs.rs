@@ -1,3 +1,6 @@
+extern crate shared;
+use shared::Message;
+use shared::send_message;
 use std::{net::{SocketAddr, TcpStream}, error::Error};
 use std::io::Write;
 use crossterm::terminal;
@@ -64,7 +67,9 @@ impl Client {
             panic!("Already connected");
         }
         self.stream = Some(TcpStream::connect(socket_addr)?);
-        write!(&mut self.stream.as_ref().unwrap(), "{}", self.login_name.as_ref().unwrap())?;
+        let msg = Message::without_message(self.login_name.as_ref().unwrap());
+        self.stream.as_ref().unwrap().write_all(msg.to_string().as_bytes())?;
+        // write!(&mut self.stream.as_ref().unwrap(), "{}", msg.to_string())?;
         self.stream.as_ref().unwrap().set_nonblocking(true)?;
         Ok(())
     }
@@ -75,5 +80,10 @@ impl Client {
         }
         self.stream = None;
         Ok(())
+    }
+
+    pub fn send_message(&mut self, message: &str) -> Result<(), Box<dyn Error>> {
+        let msg = Message::new(self.login_name.as_ref().unwrap(), None, Some(message));
+        send_message(msg.to_string().as_str(), self.stream.as_mut().unwrap())
     }
 }

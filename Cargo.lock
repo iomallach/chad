@@ -76,6 +76,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crossterm",
+ "shared",
 ]
 
 [[package]]
@@ -252,6 +253,14 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "mio",
+ "shared",
+]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]

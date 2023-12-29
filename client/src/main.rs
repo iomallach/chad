@@ -1,5 +1,4 @@
-use std::io::{Write as _, Stdout, Read, self};
-use std::net::TcpStream;
+use std::io::{Write as _, Read, self};
 use std::{net::SocketAddr, error::Error, io::stdout};
 use std::result::Result;
 use crossterm::cursor::{MoveTo, MoveDown, MoveLeft};
@@ -15,17 +14,6 @@ mod clientrs;
 mod chat;
 mod draw;
 mod parser;
-mod message;
-
-fn fetch_updates(stdout: &mut Stdout, stream: &mut TcpStream) -> Result<(), Box<dyn Error>> {
-    let mut buf: [u8; 8192] = [0; 8 * 1024];
-    match stream.read(&mut buf) {
-        Ok(0) => {Ok(())},
-        Ok(n) => Ok(execute!(stdout, Print(String::from_utf8_lossy(&buf[..n])))?),
-        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {Ok(())},
-        e => panic!("Error reading from socket {:?}", e)
-    }
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut stdout = stdout();
@@ -142,8 +130,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         stdout.queue(cursor::MoveLeft(source.len() as u16))?;
                                         stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
                                         stdout.flush()?;
-                                        if let Some(stream) = &mut client.stream {
-                                            write!(stream, "{}", source)?
+                                        // TODO: move enirely into send_message
+                                        if let Some(_) = client.stream {
+                                            client.send_message(&source)?;
                                         } else {
                                             hint(&mut stdout, &client.window, "You are offline, connect with /connect")?;
                                         }
