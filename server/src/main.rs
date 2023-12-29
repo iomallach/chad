@@ -1,5 +1,5 @@
 extern crate shared;
-use shared::Message;
+use shared::{Message, ParseMessageError, ParseMessageErrorKind};
 use shared::{read_message, send_message};
 use chrono::DateTime;
 use chrono::Local;
@@ -80,9 +80,9 @@ impl Server {
         Token(self.next_socket_id.borrow().0)
     }
 
-    fn read_message(&self, stream: &mut TcpStream) -> Message {
-        let msg = read_message(stream);
-        Message::from_str(&msg).expect("No issues here")
+    fn read_message(&self, stream: &mut TcpStream) -> Result<Message, ParseMessageError> {
+        let msg = read_message(stream)?;
+        Ok(Message::from_str(&msg).expect("No issues here"))
     }
 
     fn register_listener(&mut self) -> Result<(), Box<dyn Error>> {
@@ -93,7 +93,7 @@ impl Server {
     fn register_client(&self, mut stream: TcpStream) -> Result<Token, Box<dyn Error>> {
         let token = self.issue_token();
         
-        let message = self.read_message(&mut stream);
+        let message = self.read_message(&mut stream)?;
         self.poll.registry().register(&mut stream, token, Interest::READABLE.add(Interest::WRITABLE))?;
         self.clients.borrow_mut().insert(token, Client::new(stream, message.username));
         Ok(token)
@@ -123,13 +123,15 @@ impl Server {
             match self.listener.accept() {
                 Ok((stream, addr)) => {
                     println!("Connection from {}", addr);
-                    if let Ok(token) = self.register_client(stream) {
-                        println!("Accepted connection from {} with token {}", addr, <Token as Into<usize>>::into(token));
-                        let system_msg = Message::new("System", Some(self.clients.borrow().len()), Some("***WELCOME TO CHAD***")).to_string();
-                        send_message(system_msg.as_str(), &mut self.clients.borrow_mut().get_mut(&token).unwrap().stream).expect("Failed to write");
-                        // self.clients.borrow_mut().get_mut(&token).unwrap().stream.write(b"\x06system***Welcome to Chad!***").expect("Failed to write");
-                    } else {
-                        eprintln!("Failed to register client: {}", addr);
+                    match self.register_client(stream) {
+                        Ok(token) => {
+                            println!("Accepted connection from {} with token {}", addr, <Token as Into<usize>>::into(token));
+                            let system_msg = Message::new("System", Some(self.clients.borrow().len()), Some("***WELCOME TO CHAD***")).to_string();
+                            send_message(system_msg.as_str(), &mut self.clients.borrow_mut().get_mut(&token).unwrap().stream).expect("Failed to write");
+                            println!("Sent message: {}", system_msg);
+                        },
+                        Err(e) if e.is::<ParseMessageError> => {},
+                        Err(e) => eprintln!("Failed to register client: {} with {}", addr, e),
                     }
                 },
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -145,35 +147,38 @@ impl Server {
         if let Some(socket) = clients.get_mut(&token) {
             let addr = socket.stream.peer_addr().expect("Failed to get address");
             println!("Got event on socket {:?} and address {} from {}", token, addr, socket.login_name);
-            let mut buffer = [0; 8 * 1024];
-            match socket.stream.read(&mut buffer) {
-                Ok(0) => {
+            match read_message(&mut socket.stream) {
+                Ok(m) => {
+                    println!("Read from token={:?}, username {} saying {}", token, socket.login_name, m);
+                    Self::broadcast_message(&socket.login_name.clone(), &m, &mut clients)
+                },
+                Err(e) if e.kind != ParseMessageErrorKind::WouldBlock => {
                     println!("Socket {:?} closed", token);
                     clients.remove(&token);
                 },
-                Ok(n) => {
-                    println!("Read {} bytes from socket {:?} : {} saying {}", n, token, socket.login_name, String::from_utf8_lossy(&buffer));
-                    Self::broadcast_message(&socket.login_name.clone(), &buffer[0..n], &mut clients)
-                },
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                },
-                e => panic!("Error reading from socket {:?}: {:?}", token, e)
+                Err(e) => { panic!("Unexpected error {}", e) }
             }
+            // match socket.stream.read(&mut buffer) {
+            //     Ok(0) => {
+            //         println!("Socket {:?} closed", token);
+            //         clients.remove(&token);
+            //     },
+            //     Ok(n) => {
+            //         println!("Read {} bytes from socket {:?} : {} saying {}", n, token, socket.login_name, String::from_utf8_lossy(&buffer));
+            //         Self::broadcast_message(&socket.login_name.clone(), &buffer[0..n], &mut clients)
+            //     },
+            //     Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+            //     },
+            //     e => panic!("Error reading from socket {:?}: {:?}", token, e)
+            // }
         }
     }
 
-    fn broadcast_message(from: &str, message: &[u8], across: &mut HashMap<Token, Client>) {
+    fn broadcast_message(from: &str, message: &str, across: &mut HashMap<Token, Client>) {
         across.iter().for_each(|(tok, client)| {
             let mut stream = &client.stream;
-            let mut buffer: Vec<u8> = Vec::new();
-            let len_byte: u8 = from.len() as u8;
-            buffer.push(len_byte);
-            let sender_name_bytes = from.as_bytes();
-            buffer.extend(sender_name_bytes);
-            buffer.extend(message);
-
-            stream.write(&buffer).expect("Failed to broadcast");
-            stream.flush().expect("Failed to flush");
+            let message = Message::new(from, Some(across.len()), Some(message)).to_string();
+            send_message(&message, &mut stream).expect("Failed to write");
             // write!(&mut stream, "{}", String::from_utf8_lossy(message)).expect("Failed to broadcast");
             // if tok != from {
             // }

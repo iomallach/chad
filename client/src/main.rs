@@ -1,4 +1,9 @@
+extern crate shared;
+use shared::ParseMessageErrorKind;
+use shared::read_message;
+use shared::Message;
 use std::io::{Write as _, Read, self};
+use std::str::FromStr;
 use std::{net::SocketAddr, error::Error, io::stdout};
 use std::result::Result;
 use crossterm::cursor::{MoveTo, MoveDown, MoveLeft};
@@ -30,22 +35,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         match read()? {
             Event::Key(event) => {
                 if let Some(stream) = &mut client.stream {
-                    let mut buf: [u8; 4096] = [0; 4 * 1024];
-                    match stream.read(&mut buf) {
-                        Ok(0) => {},
-                        Ok(n) => {
-                            hint(&mut stdout, &client.window, &format!("Got {} bytes", n))?;
-                            let mut buf_iter = buf.iter();
-                            let name_length = buf_iter.next().unwrap();
-                            let delim: Vec<u8> = vec![32, 58, 32];
-                            let msg_sender = buf_iter.clone().cloned().take(*name_length as usize).chain(delim);
-                            let msg_itself = buf_iter.cloned().skip(*name_length as usize).take_while(|e| *e != 0);
-                            let msg: Vec<u8> = msg_sender.chain(msg_itself).collect();
-                            client.chat_log.put_line(std::str::from_utf8(&msg).unwrap().to_string());
+                    match read_message(stream) {
+                        Ok(m) => {
+                            let msg = Message::from_str(&m).expect("No fucking errors");
+                            client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
                         },
-                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
-                        e => { panic!("Unexpected error {:?}", e)},
+                        Err(e) if e.kind == ParseMessageErrorKind::WouldBlock => {},
+                        _ => panic!("Something went really wrong"),
                     }
+                    // let mut buf: [u8; 4096] = [0; 4 * 1024];
+                    // match stream.read(&mut buf) {
+                    //     Ok(0) => {},
+                    //     Ok(n) => {
+                    //         hint(&mut stdout, &client.window, &format!("Got {} bytes", n))?;
+                    //         let mut buf_iter = buf.iter();
+                    //         let name_length = buf_iter.next().unwrap();
+                    //         let delim: Vec<u8> = vec![32, 58, 32];
+                    //         let msg_sender = buf_iter.clone().cloned().take(*name_length as usize).chain(delim);
+                    //         let msg_itself = buf_iter.cloned().skip(*name_length as usize).take_while(|e| *e != 0);
+                    //         let msg: Vec<u8> = msg_sender.chain(msg_itself).collect();
+                    //         client.chat_log.put_line(std::str::from_utf8(&msg).unwrap().to_string());
+                    //     },
+                    //     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
+                    //     e => { panic!("Unexpected error {:?}", e)},
+                    // }
                 }
                 if !client.chat_log.is_empty() {
                     stdout.queue(cursor::SavePosition)?;

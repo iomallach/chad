@@ -21,7 +21,7 @@ impl ToString for MessageHeader {
 }
 
 impl FromStr for MessageHeader {
-    type Err = ParseMessageError;
+    type Err = Box<dyn Error>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (header, value) = s.split_once(':').unwrap_or((s, s));
@@ -31,7 +31,7 @@ impl FromStr for MessageHeader {
             "timestamp" => Ok(Self::Timestamp(value.trim().to_owned())),
             "connections" => Ok(Self::Connections(value.parse().expect("No parse error"))),
             "has_message" => Ok(Self::HasMessage),
-            _ => Err(ParseMessageError {kind: ParseMessageErrorKind::UnknownHeader})
+            _ => Box::new(Err(std::io::Error::new()))
         }
     }
 }
@@ -146,7 +146,8 @@ impl FromStr for Message {
     }
 }
 
-pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, Box<dyn Error>> {
+// TODO: take a buffer and return the number of bytes read
+pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, ParseMessageError> {
     let mut reader = io::BufReader::new(from);
     let mut message = String::new();
     let mut processed_headers = false;
@@ -154,9 +155,9 @@ pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, Box<dyn Error>>
     loop {
         let mut line = String::new();
         match reader.read_line(&mut line) {
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => return Err(ParseMessageError{kind: ParseMessageErrorKind::WouldBlock}),
             Err(e) => panic!("Something went wrong {}", e),
-            Ok(0) => return Err(Box::new(ParseMessageError{kind: ParseMessageErrorKind::SocketClosed})),
+            Ok(0) => return Err(ParseMessageError{kind: ParseMessageErrorKind::SocketClosed}),
             Ok(_) => {},
         }
 
@@ -181,18 +182,34 @@ pub fn send_message<T: io::Write>(what: &str, to: &mut T,) -> Result<(), Box<dyn
 pub enum ParseMessageErrorKind {
     SocketClosed,
     UnknownHeader,
+    WouldBlock,
+}
+
+impl PartialEq for ParseMessageErrorKind {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (&Self::SocketClosed, &Self::SocketClosed) => true,
+            (&Self::UnknownHeader, &Self::UnknownHeader) => true,
+            (&Self::WouldBlock, &Self::WouldBlock) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct ParseMessageError {
-    kind: ParseMessageErrorKind,
+    pub kind: ParseMessageErrorKind,
 }
 
 impl Error for ParseMessageError {}
 
 impl Display for ParseMessageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid message format")
+        match self.kind {
+            ParseMessageErrorKind::SocketClosed => write!(f, "Socket closed"),
+            ParseMessageErrorKind::UnknownHeader => write!(f, "Unknown header"),
+            ParseMessageErrorKind::WouldBlock => write!(f, "Would block"),
+        }
     }
 }
 

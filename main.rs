@@ -4,6 +4,8 @@ fn main() {
         println!("{:?}", p)
     }
 
+    println!("{:?}", "на русском".as_bytes());
+
     // let (head, tail) = s.split_once("\r\n\r\n").unwrap();
     // println!("{:?}", head);
     // println!("{:?}", tail);
