@@ -1,6 +1,7 @@
 extern crate shared;
 use shared::Message;
 use shared::send_message;
+use std::io;
 use std::{net::{SocketAddr, TcpStream}, error::Error};
 use std::io::Write;
 use crossterm::terminal;
@@ -82,8 +83,9 @@ impl Client {
         Ok(())
     }
 
-    pub fn send_message(&mut self, message: &str) -> Result<(), Box<dyn Error>> {
+    pub fn send_message(&mut self, message: &str) -> Result<(), io::Error> {
         let msg = Message::new(self.login_name.as_ref().unwrap(), None, Some(message));
+        let see_msg = msg.to_string();
         send_message(msg.to_string().as_str(), self.stream.as_mut().unwrap())
     }
 }

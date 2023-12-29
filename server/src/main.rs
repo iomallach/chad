@@ -80,7 +80,7 @@ impl Server {
         Token(self.next_socket_id.borrow().0)
     }
 
-    fn read_message(&self, stream: &mut TcpStream) -> Result<Message, ParseMessageError> {
+    fn read_message(&self, stream: &mut TcpStream) -> Result<Message, io::Error> {
         let msg = read_message(stream)?;
         Ok(Message::from_str(&msg).expect("No issues here"))
     }
@@ -90,9 +90,10 @@ impl Server {
         Ok(())
     }
 
-    fn register_client(&self, mut stream: TcpStream) -> Result<Token, Box<dyn Error>> {
+    fn register_client(&self, mut stream: TcpStream) -> Result<Token, io::Error> {
         let token = self.issue_token();
-        
+        // TODO: what do I do with this shit?
+        std::thread::sleep(std::time::Duration::from_millis(100));
         let message = self.read_message(&mut stream)?;
         self.poll.registry().register(&mut stream, token, Interest::READABLE.add(Interest::WRITABLE))?;
         self.clients.borrow_mut().insert(token, Client::new(stream, message.username));
@@ -130,7 +131,7 @@ impl Server {
                             send_message(system_msg.as_str(), &mut self.clients.borrow_mut().get_mut(&token).unwrap().stream).expect("Failed to write");
                             println!("Sent message: {}", system_msg);
                         },
-                        Err(e) if e.is::<ParseMessageError> => {},
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
                         Err(e) => eprintln!("Failed to register client: {} with {}", addr, e),
                     }
                 },
@@ -150,12 +151,13 @@ impl Server {
             match read_message(&mut socket.stream) {
                 Ok(m) => {
                     println!("Read from token={:?}, username {} saying {}", token, socket.login_name, m);
-                    Self::broadcast_message(&socket.login_name.clone(), &m, &mut clients)
+                    Self::broadcast_message(&socket.login_name.clone(), Message::from_str(&m).unwrap(), &mut clients)
                 },
-                Err(e) if e.kind != ParseMessageErrorKind::WouldBlock => {
+                Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
                     println!("Socket {:?} closed", token);
                     clients.remove(&token);
                 },
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
                 Err(e) => { panic!("Unexpected error {}", e) }
             }
             // match socket.stream.read(&mut buffer) {
@@ -174,14 +176,13 @@ impl Server {
         }
     }
 
-    fn broadcast_message(from: &str, message: &str, across: &mut HashMap<Token, Client>) {
+    fn broadcast_message(from: &str, message: Message, across: &mut HashMap<Token, Client>) {
         across.iter().for_each(|(tok, client)| {
             let mut stream = &client.stream;
-            let message = Message::new(from, Some(across.len()), Some(message)).to_string();
-            send_message(&message, &mut stream).expect("Failed to write");
-            // write!(&mut stream, "{}", String::from_utf8_lossy(message)).expect("Failed to broadcast");
-            // if tok != from {
-            // }
+            if let Some(m) = &message.message {
+                let broadcast_message = Message::new(from, Some(across.len()), Some(m)).to_string();
+                send_message(&broadcast_message, &mut stream).expect("Failed to write");
+            }
         })
     }
 }

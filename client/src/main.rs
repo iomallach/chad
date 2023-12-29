@@ -38,10 +38,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     match read_message(stream) {
                         Ok(m) => {
                             let msg = Message::from_str(&m).expect("No fucking errors");
-                            client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
+                            if msg.has_message {
+                                client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
+                            }
                         },
-                        Err(e) if e.kind == ParseMessageErrorKind::WouldBlock => {},
-                        _ => panic!("Something went really wrong"),
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
+                        e => panic!("Something went really wrong {:?}", e),
                     }
                     // let mut buf: [u8; 4096] = [0; 4 * 1024];
                     // match stream.read(&mut buf) {
@@ -89,6 +91,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     KeyCode::Enter => {
                         let source: String = client_input.buffer.drain(..).collect();
+                        if source.is_empty() {
+                            continue
+                        }
                         let maybe_command = CommandParser::new(&source).next_command();
                         match maybe_command {
                             Ok(cmd) => {

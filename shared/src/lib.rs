@@ -1,6 +1,7 @@
-use std::{error::Error, fmt::Display, str::FromStr};
+use std::{error, fmt::Display, str::FromStr, io};
 use std::result::Result;
-use std::io::{self, BufRead};
+use std::io::BufRead;
+
 
 pub enum MessageHeader {
     Username(String),
@@ -21,7 +22,7 @@ impl ToString for MessageHeader {
 }
 
 impl FromStr for MessageHeader {
-    type Err = Box<dyn Error>;
+    type Err = io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (header, value) = s.split_once(':').unwrap_or((s, s));
@@ -31,7 +32,11 @@ impl FromStr for MessageHeader {
             "timestamp" => Ok(Self::Timestamp(value.trim().to_owned())),
             "connections" => Ok(Self::Connections(value.parse().expect("No parse error"))),
             "has_message" => Ok(Self::HasMessage),
-            _ => Box::new(Err(std::io::Error::new()))
+            x => {
+                let error_msg = format!("Unexpected header: {}", x);
+                let error = std::io::Error::new(io::ErrorKind::InvalidData, error_msg);
+                Err(error)
+            }
         }
     }
 }
@@ -106,7 +111,7 @@ impl ToString for Message {
 }
 
 impl FromStr for Message {
-    type Err = ParseMessageError;
+    type Err = io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let raw_parts = s.split("\r\n");
@@ -147,7 +152,7 @@ impl FromStr for Message {
 }
 
 // TODO: take a buffer and return the number of bytes read
-pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, ParseMessageError> {
+pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, io::Error> {
     let mut reader = io::BufReader::new(from);
     let mut message = String::new();
     let mut processed_headers = false;
@@ -155,9 +160,9 @@ pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, ParseMessageErr
     loop {
         let mut line = String::new();
         match reader.read_line(&mut line) {
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => return Err(ParseMessageError{kind: ParseMessageErrorKind::WouldBlock}),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => return Err(e),
             Err(e) => panic!("Something went wrong {}", e),
-            Ok(0) => return Err(ParseMessageError{kind: ParseMessageErrorKind::SocketClosed}),
+            Ok(0) => return Err(io::Error::new(io::ErrorKind::BrokenPipe, "Broken pipe")),
             Ok(_) => {},
         }
 
@@ -173,7 +178,7 @@ pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, ParseMessageErr
     Ok(message)
 }
 
-pub fn send_message<T: io::Write>(what: &str, to: &mut T,) -> Result<(), Box<dyn Error>> {
+pub fn send_message<T: io::Write>(what: &str, to: &mut T,) -> Result<(), io::Error> {
     to.write_all(what.as_bytes())?;
     Ok(())
 }
@@ -201,7 +206,7 @@ pub struct ParseMessageError {
     pub kind: ParseMessageErrorKind,
 }
 
-impl Error for ParseMessageError {}
+impl error::Error for ParseMessageError {}
 
 impl Display for ParseMessageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
