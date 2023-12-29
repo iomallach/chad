@@ -16,14 +16,12 @@ pub enum Command {
 
 pub struct CommandParser<'a> {
     source: Peekable<Chars<'a>>,
-    current: usize
 }
 
 impl<'a> CommandParser<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
             source: source.chars().peekable(),
-            current: 0,
         }
     }
 

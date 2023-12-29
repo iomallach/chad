@@ -1,13 +1,14 @@
 extern crate shared;
-use shared::ParseMessageErrorKind;
+use crossterm::queue;
 use shared::read_message;
 use shared::Message;
-use std::io::{Write as _, Read, self};
+use std::io::Stdout;
+use std::io::{Write as _, self};
 use std::str::FromStr;
 use std::{net::SocketAddr, error::Error, io::stdout};
 use std::result::Result;
 use crossterm::cursor::{MoveTo, MoveDown, MoveLeft};
-use crossterm::event::{read, Event, KeyCode, KeyModifiers};
+use crossterm::event::{read, poll, Event, KeyCode, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::{execute, ExecutableCommand, QueueableCommand, cursor};
 use crossterm::terminal::{self, Clear};
@@ -19,6 +20,47 @@ mod clientrs;
 mod chat;
 mod draw;
 mod parser;
+
+fn fetch_message(client: &mut Client) {
+    if let Some(stream) = &mut client.stream {
+        match read_message(stream) {
+            Ok(m) => {
+                let msg = Message::from_str(&m).expect("No fucking errors");
+                if msg.has_message {
+                    client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
+                }
+            },
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
+            e => panic!("Something went really wrong {:?}", e),
+        }
+    }
+}
+
+fn render_chat(client: &Client, stdout: &mut Stdout) -> Result<(), Box<dyn Error>> {
+    if !client.chat_log.is_empty() {
+        stdout.queue(cursor::SavePosition)?;
+        stdout.queue(cursor::Hide)?;
+        stdout.queue(MoveTo(0, 2))?;
+        for m in client.chat_log.get() {
+            stdout.queue(Print(m))?;
+            stdout.queue(MoveDown(1))?;
+            stdout.queue(MoveLeft(client.window.width as u16))?;
+        }
+        stdout.queue(cursor::RestorePosition)?;
+        stdout.queue(cursor::Show)?;
+        stdout.flush()?;
+    }
+    Ok(())
+}
+
+fn clear_prompt(stdout: &mut Stdout, move_left: u16) -> Result<(), Box<dyn Error>> {
+    queue!(
+        stdout,
+        cursor::MoveLeft(move_left),
+        Clear(terminal::ClearType::UntilNewLine),
+    )?;
+    Ok(stdout.flush()?)
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut stdout = stdout();
@@ -32,49 +74,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     status_bar(&mut stdout, &client.window, "Offline", 0)?;
 
     loop {
+        // poll(timeout)
         match read()? {
             Event::Key(event) => {
-                if let Some(stream) = &mut client.stream {
-                    match read_message(stream) {
-                        Ok(m) => {
-                            let msg = Message::from_str(&m).expect("No fucking errors");
-                            if msg.has_message {
-                                client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
-                            }
-                        },
-                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
-                        e => panic!("Something went really wrong {:?}", e),
-                    }
-                    // let mut buf: [u8; 4096] = [0; 4 * 1024];
-                    // match stream.read(&mut buf) {
-                    //     Ok(0) => {},
-                    //     Ok(n) => {
-                    //         hint(&mut stdout, &client.window, &format!("Got {} bytes", n))?;
-                    //         let mut buf_iter = buf.iter();
-                    //         let name_length = buf_iter.next().unwrap();
-                    //         let delim: Vec<u8> = vec![32, 58, 32];
-                    //         let msg_sender = buf_iter.clone().cloned().take(*name_length as usize).chain(delim);
-                    //         let msg_itself = buf_iter.cloned().skip(*name_length as usize).take_while(|e| *e != 0);
-                    //         let msg: Vec<u8> = msg_sender.chain(msg_itself).collect();
-                    //         client.chat_log.put_line(std::str::from_utf8(&msg).unwrap().to_string());
-                    //     },
-                    //     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
-                    //     e => { panic!("Unexpected error {:?}", e)},
-                    // }
-                }
-                if !client.chat_log.is_empty() {
-                    stdout.queue(cursor::SavePosition)?;
-                    stdout.queue(cursor::Hide)?;
-                    stdout.queue(MoveTo(0, 2))?;
-                    for m in client.chat_log.get() {
-                        stdout.queue(Print(m))?;
-                        stdout.queue(MoveDown(1))?;
-                        stdout.queue(MoveLeft(client.window.width as u16))?;
-                    }
-                    stdout.queue(cursor::RestorePosition)?;
-                    stdout.queue(cursor::Show)?;
-                    stdout.flush()?;
-                }
+                fetch_message(&mut client);
+                render_chat(&client, &mut stdout)?;
                 match event.code {
                     KeyCode::Char(c) if event.modifiers.is_empty() => {
                         client_input.push(c);
@@ -82,9 +86,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     KeyCode::Backspace => {
                         client_input.backspace();
-                        stdout.queue(cursor::MoveLeft(1))?;
-                        stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
-                        stdout.flush()?;
+                        clear_prompt(&mut stdout, 1)?;
                     }
                     KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                         break;
@@ -100,23 +102,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 match cmd {
                                     Command::Connect => {
                                         if client.login_name.is_none() {
-                                            stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                            stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
+                                            clear_prompt(&mut stdout, source.len() as u16)?;
                                             hint(&mut stdout, &client.window, "You are not logged in, login via /login")?;
                                             continue;
                                         }
                                         let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
                                         match client.connect(socket_addr) {
                                             Ok(_) => {
-                                                stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                                stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
+                                                clear_prompt(&mut stdout, source.len() as u16)?;
                                                 status_bar(&mut stdout, &client.window, "Online", 1)?;
                                                 hint(&mut stdout, &client.window, "Connected")?;
                                                 continue;
                                             },
                                             Err(e) => {
-                                                stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                                stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
+                                                clear_prompt(&mut stdout, source.len() as u16)?;
                                                 hint(&mut stdout, &client.window, &e.to_string())?;
                                                 continue;
                                             }
@@ -124,8 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     },
                                     Command::Login(l) => {
                                         client.login(&l);
-                                        stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                        stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
+                                        clear_prompt(&mut stdout, source.len() as u16)?;
                                         hint(&mut stdout, &client.window, &format!("Logged in as {}, now connect via /connect", l))?;
                                     }
                                 }
@@ -133,21 +131,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                             Err(e) => {
                                 match e {
                                     ParseError::InvalidCommand => {
-                                        stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                        stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
-                                        stdout.flush()?;
+                                        clear_prompt(&mut stdout, source.len() as u16)?;
                                         hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
                                     },
                                     ParseError::NoArgument => {
-                                        stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                        stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
-                                        stdout.flush()?;
+                                        clear_prompt(&mut stdout, source.len() as u16)?;
                                         hint(&mut stdout, &client.window, "No argument provided for /login")?;
                                     },
                                     ParseError::NotACommand => {
-                                        stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                        stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
-                                        stdout.flush()?;
+                                        clear_prompt(&mut stdout, source.len() as u16)?;
                                         // TODO: move enirely into send_message
                                         if let Some(_) = client.stream {
                                             client.send_message(&source)?;
@@ -156,9 +148,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         }
                                     },
                                     ParseError::UnexpectedToken => {
-                                        stdout.queue(cursor::MoveLeft(source.len() as u16))?;
-                                        stdout.queue(Clear(terminal::ClearType::UntilNewLine))?;
-                                        stdout.flush()?;
+                                        clear_prompt(&mut stdout, source.len() as u16)?;
                                         hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
                                     },
                                 }
