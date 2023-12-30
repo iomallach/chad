@@ -8,22 +8,26 @@ use crossterm::terminal;
 use crate::chat::ChatLog;
 
 pub struct ClientInput {
-    pub buffer: Vec<char>,
+    pub inner: Vec<char>,
 }
 
 impl ClientInput {
     pub fn new() -> Self {
         Self {
-            buffer: Vec::new(),
+            inner: Vec::new(),
         }
     }
 
     pub fn push(&mut self, ch: char) {
-        self.buffer.push(ch)
+        self.inner.push(ch)
+    }
+
+    pub fn push_uppercase(&mut self, ch: std::char::ToUppercase) {
+        self.inner.extend(ch)
     }
 
     pub fn backspace(&mut self) {
-        self.buffer.pop();
+        self.inner.pop();
     }
 }
 

@@ -12,6 +12,7 @@ pub enum ParseError {
 pub enum Command {
     Login(String),
     Connect,
+    Disconnect,
 }
 
 pub struct CommandParser<'a> {
@@ -80,6 +81,7 @@ impl<'a> CommandParser<'a> {
                 }
             }
             "connect" => Ok(Command::Connect),
+            "disconnect" => Ok(Command::Disconnect),
             _ => Err(ParseError::InvalidCommand),
         }
     }

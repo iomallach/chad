@@ -30,8 +30,13 @@ fn fetch_message(client: &mut Client) {
                     client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
                 }
             },
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
-            e => panic!("Something went really wrong {:?}", e),
+            Err(e) => {
+                match e.kind() {
+                    io::ErrorKind::WouldBlock => {},
+                    io::ErrorKind::BrokenPipe => return,
+                    _ => panic!("Something went really wrong {:?}", e),
+                }
+            }
         }
     }
 }
@@ -74,95 +79,112 @@ fn main() -> Result<(), Box<dyn Error>> {
     status_bar(&mut stdout, &client.window, "Offline", 0)?;
 
     loop {
-        // poll(timeout)
-        match read()? {
-            Event::Key(event) => {
-                fetch_message(&mut client);
-                render_chat(&client, &mut stdout)?;
-                match event.code {
-                    KeyCode::Char(c) if event.modifiers.is_empty() => {
-                        client_input.push(c);
-                        stdout.execute(Print(c))?;
-                    }
-                    KeyCode::Backspace => {
-                        client_input.backspace();
-                        clear_prompt(&mut stdout, 1)?;
-                    }
-                    KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-                        break;
-                    }
-                    KeyCode::Enter => {
-                        let source: String = client_input.buffer.drain(..).collect();
-                        if source.is_empty() {
-                            continue
+        if poll(std::time::Duration::from_millis(50))? {
+            match read()? {
+                Event::Key(event) => {
+                    fetch_message(&mut client);
+                    render_chat(&client, &mut stdout)?;
+                    match event.code {
+                        KeyCode::Char(c) if event.modifiers.is_empty() => {
+                            client_input.push(c);
+                            stdout.execute(Print(c))?;
                         }
-                        let maybe_command = CommandParser::new(&source).next_command();
-                        match maybe_command {
-                            Ok(cmd) => {
-                                match cmd {
-                                    Command::Connect => {
-                                        if client.login_name.is_none() {
+                        KeyCode::Char(c) if event.modifiers.contains(KeyModifiers::SHIFT) => {
+                            client_input.push_uppercase(c.to_uppercase());
+                            stdout.execute(Print(c.to_uppercase()))?;
+                        }
+                        KeyCode::Backspace => {
+                            client_input.backspace();
+                            clear_prompt(&mut stdout, 1)?;
+                        }
+                        KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                            break;
+                        }
+                        KeyCode::Enter => {
+                            let source: String = client_input.inner.drain(..).collect();
+                            if source.is_empty() {
+                                continue
+                            }
+                            let maybe_command = CommandParser::new(&source).next_command();
+                            match maybe_command {
+                                Ok(cmd) => {
+                                    match cmd {
+                                        Command::Disconnect => {
+                                            if client.stream.is_some() {
+                                                client.disconnect()?;
+                                                hint(&mut stdout, &client.window, "Disconnected")?;
+                                            } else {
+                                                hint(&mut stdout, &client.window, "Not connected")?;
+                                            }
                                             clear_prompt(&mut stdout, source.len() as u16)?;
-                                            hint(&mut stdout, &client.window, "You are not logged in, login via /login")?;
-                                            continue;
                                         }
-                                        let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-                                        match client.connect(socket_addr) {
-                                            Ok(_) => {
+                                        Command::Connect => {
+                                            if client.login_name.is_none() {
                                                 clear_prompt(&mut stdout, source.len() as u16)?;
-                                                status_bar(&mut stdout, &client.window, "Online", 1)?;
-                                                hint(&mut stdout, &client.window, "Connected")?;
-                                                continue;
-                                            },
-                                            Err(e) => {
-                                                clear_prompt(&mut stdout, source.len() as u16)?;
-                                                hint(&mut stdout, &client.window, &e.to_string())?;
+                                                hint(&mut stdout, &client.window, "You are not logged in, login via /login")?;
                                                 continue;
                                             }
+                                            let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+                                            match client.connect(socket_addr) {
+                                                Ok(_) => {
+                                                    clear_prompt(&mut stdout, source.len() as u16)?;
+                                                    status_bar(&mut stdout, &client.window, "Online", 1)?;
+                                                    hint(&mut stdout, &client.window, "Connected")?;
+                                                    continue;
+                                                },
+                                                Err(e) => {
+                                                    clear_prompt(&mut stdout, source.len() as u16)?;
+                                                    hint(&mut stdout, &client.window, &e.to_string())?;
+                                                    continue;
+                                                }
+                                            }
+                                        },
+                                        Command::Login(l) => {
+                                            client.login(&l);
+                                            clear_prompt(&mut stdout, source.len() as u16)?;
+                                            hint(&mut stdout, &client.window, &format!("Logged in as {}, now connect via /connect", l))?;
                                         }
-                                    },
-                                    Command::Login(l) => {
-                                        client.login(&l);
-                                        clear_prompt(&mut stdout, source.len() as u16)?;
-                                        hint(&mut stdout, &client.window, &format!("Logged in as {}, now connect via /connect", l))?;
+                                    }
+                                },
+                                Err(e) => {
+                                    match e {
+                                        ParseError::InvalidCommand => {
+                                            clear_prompt(&mut stdout, source.len() as u16)?;
+                                            hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
+                                        },
+                                        ParseError::NoArgument => {
+                                            clear_prompt(&mut stdout, source.len() as u16)?;
+                                            hint(&mut stdout, &client.window, "No argument provided for /login")?;
+                                        },
+                                        ParseError::NotACommand => {
+                                            clear_prompt(&mut stdout, source.len() as u16)?;
+                                            // TODO: move enirely into send_message
+                                            if let Some(_) = client.stream {
+                                                client.send_message(&source)?;
+                                            } else {
+                                                hint(&mut stdout, &client.window, "You are offline, connect with /connect")?;
+                                            }
+                                        },
+                                        ParseError::UnexpectedToken => {
+                                            clear_prompt(&mut stdout, source.len() as u16)?;
+                                            hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
+                                        },
                                     }
                                 }
-                            },
-                            Err(e) => {
-                                match e {
-                                    ParseError::InvalidCommand => {
-                                        clear_prompt(&mut stdout, source.len() as u16)?;
-                                        hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
-                                    },
-                                    ParseError::NoArgument => {
-                                        clear_prompt(&mut stdout, source.len() as u16)?;
-                                        hint(&mut stdout, &client.window, "No argument provided for /login")?;
-                                    },
-                                    ParseError::NotACommand => {
-                                        clear_prompt(&mut stdout, source.len() as u16)?;
-                                        // TODO: move enirely into send_message
-                                        if let Some(_) = client.stream {
-                                            client.send_message(&source)?;
-                                        } else {
-                                            hint(&mut stdout, &client.window, "You are offline, connect with /connect")?;
-                                        }
-                                    },
-                                    ParseError::UnexpectedToken => {
-                                        clear_prompt(&mut stdout, source.len() as u16)?;
-                                        hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
-                                    },
-                                }
                             }
-                        }
-                    },
-                    _ => {}
+                        },
+                        _ => {}
+                    }
                 }
+                // Event::Key(event) => {
+                //     execute!(stdout, Print(format!("{:?}\n", event)))?;
+                //     fetch_updates(&mut stdout, &mut stream)?;
+                // },
+                _ => {}
             }
-            // Event::Key(event) => {
-            //     execute!(stdout, Print(format!("{:?}\n", event)))?;
-            //     fetch_updates(&mut stdout, &mut stream)?;
-            // },
-            _ => {}
+        } else {
+            fetch_message(&mut client);
+            render_chat(&client, &mut stdout)?;
         }
     }
 

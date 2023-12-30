@@ -1,1 +1,5 @@
-- Future: server sends a few bytes telling how much bytes are the message and then how many bytes is the sender. The rest is the number of connected clients
+- Number of connected clients
+- Status bar "component" with evenly spaced writings
+- Header "component"
+- Prompt is on the last line
+- Allow capitalized letters
