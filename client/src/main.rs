@@ -27,7 +27,8 @@ fn fetch_message(client: &mut Client) {
             Ok(m) => {
                 let msg = Message::from_str(&m).expect("No fucking errors");
                 if msg.has_message {
-                    client.chat_log.put_line(format!("[{}][{}] == {}", msg.timestamp, msg.username, msg.message.unwrap()));
+                    let chat_message = chat::ChatMessage::default(msg.message.unwrap(), msg.timestamp, msg.username);
+                    client.chat_log.put_line(chat_message);
                 }
             },
             Err(e) => {

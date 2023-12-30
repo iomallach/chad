@@ -1,4 +1,5 @@
 use crossterm::style::Color;
+use crossterm::style::{Stylize, style};
 
 pub struct MessagePiece {
     contents: String,
@@ -24,7 +25,7 @@ impl MessagePiece {
     }
 
     fn timestamp(contents: String) -> Self {
-        Self::new(contents, Color::Grey, Color::Black)
+        Self::new(contents, Color::DarkYellow, Color::Black)
     }
 }
 
@@ -37,7 +38,7 @@ pub struct ChatMessage {
 }
 
 impl ChatMessage {
-    fn new(msg: String, timestamp: String, username: String, fg_color: Color, bg_color: Color) -> Self {
+    pub fn new(msg: String, timestamp: String, username: String, fg_color: Color, bg_color: Color) -> Self {
         Self {
             timestamp: MessagePiece::timestamp(timestamp),
             username: MessagePiece::username(username),
@@ -47,17 +48,26 @@ impl ChatMessage {
         }
     }
 
-    fn default(msg: String, timestamp: String, username: String) -> Self {
+    pub fn default(msg: String, timestamp: String, username: String) -> Self {
         Self::new(msg, timestamp, username, Color::White, Color::Black)
     }
 
-    fn system(msg: String, timestamp: String, username: String) -> Self {
+    pub fn system(msg: String, timestamp: String, username: String) -> Self {
         Self::new(msg, timestamp, username, Color::Red, Color::Black)
     }
 }
 
+impl std::fmt::Display for ChatMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let timestamp = style(&self.timestamp.contents).with(self.timestamp.fg_color);
+        let username = style(&self.username.contents).with(self.username.fg_color);
+        let message = style(&self.msg.contents).with(self.msg.fg_color);
+        write!(f, "[{}][{}]: {}", timestamp, username, message)
+    }
+}
+
 pub struct ChatLog {
-    lines: Vec<String>,
+    lines: Vec<ChatMessage>,
     height: usize,
     width: usize,
 }
@@ -71,7 +81,7 @@ impl ChatLog {
         }
     }
 
-    pub fn put_line(&mut self, line: String) {
+    pub fn put_line(&mut self, line: ChatMessage) {
         // TODO: make it limited to height
         self.lines.push(line);
     }
@@ -80,7 +90,7 @@ impl ChatLog {
         self.lines.is_empty()
     }
 
-    pub fn get(&self) -> &[String] {
+    pub fn get(&self) -> &[ChatMessage] {
         &self.lines
     }
 }
