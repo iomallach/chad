@@ -180,6 +180,7 @@ impl Server {
         across.iter().for_each(|(tok, client)| {
             let mut stream = &client.stream;
             if let Some(m) = &message.message {
+                println!("Broadcasting {} length", across.len());
                 let broadcast_message = Message::new(from, Some(across.len()), Some(m)).to_string();
                 send_message(&broadcast_message, &mut stream).expect("Failed to write");
             }

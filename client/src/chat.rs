@@ -1,6 +1,7 @@
 use crossterm::style::Color;
 use crossterm::style::{Stylize, style};
 
+#[derive(Debug)]
 pub struct MessagePiece {
     contents: String,
     fg_color: Color,
@@ -29,6 +30,7 @@ impl MessagePiece {
     }
 }
 
+#[derive(Debug)]
 pub struct ChatMessage {
     timestamp: MessagePiece,
     username: MessagePiece,

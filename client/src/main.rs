@@ -20,15 +20,21 @@ mod clientrs;
 mod chat;
 mod draw;
 mod parser;
+mod message_parser;
 
 fn fetch_message(client: &mut Client) {
     if let Some(stream) = &mut client.stream {
         match read_message(stream) {
             Ok(m) => {
                 let msg = Message::from_str(&m).expect("No fucking errors");
+                hint(&mut stdout(), &client.window, &format!("Got {:?} from broadcast", msg)).expect("Failed rendering hint");
                 if msg.has_message {
                     let chat_message = chat::ChatMessage::default(msg.message.unwrap(), msg.timestamp, msg.username);
                     client.chat_log.put_line(chat_message);
+                }
+                // TODO: this likely doesn't belong here
+                if let Some(n_conn) = msg.connections {
+                    status_bar(&mut stdout(), &client.window, "Online", n_conn).expect("Failed rendering status bar");
                 }
             },
             Err(e) => {

@@ -41,6 +41,7 @@ impl FromStr for MessageHeader {
     }
 }
 
+#[derive(Debug)]
 pub struct Message {
     pub username: String,
     pub timestamp: String,

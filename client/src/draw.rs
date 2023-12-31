@@ -14,7 +14,7 @@ pub fn status_bar(stdout: &mut Stdout, window: &Window, status: &str, clients_co
         "Online" => style::Color::Green,
         _ => panic!("Unrecognized status"),
     };
-    stdout.queue(MoveTo(0, window.height as u16))?;
+    stdout.queue(MoveTo(0, window.height as u16 - 2))?;
     stdout.queue(style::SetBackgroundColor(style::Color::White))?;
     stdout.queue(style::SetForegroundColor(color))?;
     stdout.queue(Print(format!("Status: {}", status)))?;
@@ -25,7 +25,7 @@ pub fn status_bar(stdout: &mut Stdout, window: &Window, status: &str, clients_co
         stdout.queue(Print(" "))?;
     }
     stdout.queue(style::ResetColor)?;
-    stdout.queue(MoveTo(0, window.height as u16 - 3))?;
+    stdout.queue(MoveTo(0, window.height as u16))?;
     stdout.flush()?;
     Ok(())
 }
@@ -52,7 +52,7 @@ pub fn hint(stdout: &mut Stdout, window: &Window, hint: &str) -> Result<(), Box<
     stdout.queue(style::SetForegroundColor(style::Color::Magenta))?;
     stdout.queue(Print(hint))?;
     stdout.queue(style::ResetColor)?;
-    stdout.queue(MoveTo(0, window.height as u16 - 3))?;
+    stdout.queue(MoveTo(0, window.height as u16))?;
     stdout.flush()?;
     Ok(())
 }
