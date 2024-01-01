@@ -56,7 +56,7 @@ impl Message {
             None => {
                 Self {
                     username: username.to_owned(),
-                    timestamp: format!("{}", chrono::offset::Local::now()),
+                    timestamp: chrono::offset::Local::now().format("%d-%m-%Y %H:%M:%S").to_string(),
                     connections,
                     has_message: false,
                     message: None,
@@ -65,7 +65,7 @@ impl Message {
             Some(m) => {
                 Self {
                     username: username.to_owned(),
-                    timestamp: format!("{}", chrono::offset::Local::now()),
+                    timestamp: chrono::offset::Local::now().format("%d-%m-%Y %H:%M:%S").to_string(),
                     connections,
                     has_message: true,
                     message: Some(m.to_owned()),
@@ -77,7 +77,7 @@ impl Message {
     pub fn without_message(username: &str) -> Self {
         Self {
             username: username.to_owned(),
-            timestamp: format!("{}", chrono::offset::Local::now()),
+            timestamp: chrono::offset::Local::now().format("%d-%m-%Y %H:%M:%S").to_string(),
             connections: None,
             has_message: false,
             message: None,
@@ -87,7 +87,7 @@ impl Message {
     pub fn with_message(username: &str, message: &str) -> Self {
         Self {
             username: username.to_owned(),
-            timestamp: format!("{}", chrono::offset::Local::now()),
+            timestamp: chrono::offset::Local::now().format("%d-%m-%Y %H:%M:%S").to_string(),
             connections: None,
             has_message: true,
             message: Some(message.to_owned()),
@@ -101,6 +101,9 @@ impl ToString for Message {
 
         str_repr.push_str(&MessageHeader::Username(self.username.to_owned()).to_string());
         str_repr.push_str(&MessageHeader::Timestamp(self.timestamp.to_owned()).to_string());
+        if let Some(conn_n) = self.connections {
+            str_repr.push_str(&MessageHeader::Connections(conn_n).to_string());
+        }
         if self.has_message {
             str_repr.push_str(&MessageHeader::HasMessage.to_string());
             str_repr.push_str("\r\n");
@@ -162,6 +165,7 @@ pub fn read_message<T: io::Read>(from: &mut T) -> Result<String, io::Error> {
         let mut line = String::new();
         match reader.read_line(&mut line) {
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => return Err(e),
+            Err(e) if e.kind() == io::ErrorKind::ConnectionReset => return Err(e),
             Err(e) => panic!("Something went wrong {}", e),
             Ok(0) => return Err(io::Error::new(io::ErrorKind::BrokenPipe, "Broken pipe")),
             Ok(_) => {},

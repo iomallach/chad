@@ -13,8 +13,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::result::Result;
 use std::io;
-use std::io::Read;
-use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
