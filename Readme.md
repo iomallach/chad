@@ -1,6 +1,6 @@
 ## Random ideas
 - Number of connected clients [DONE]
-- Status bar "component" with evenly spaced writings [DONE][Requires coord refactoring]
+- Status bar "component" with evenly spaced writings [DONE][Requires coord refactoring][DONE]
 - Header "component"
 - Prompt is on the last line [DONE]
 - Allow capitalized letters [DONE]
@@ -9,8 +9,8 @@
 
 ## Features
 - Authorization
-- Broadcasting "entered chat" message
-- Proper parser for messages
+- Broadcasting "entered chat" message [DONE]
+- Proper parser for messages [DONE]
 - Show online users somewhere
 - In-message markdown support
 

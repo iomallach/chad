@@ -1,5 +1,6 @@
 extern crate shared;
 use crossterm::queue;
+use draw::{StatusBarBox, StatusBarComponent};
 use shared::read_message;
 use std::io::Stdout;
 use std::io::{Write as _, self};
@@ -11,7 +12,7 @@ use crossterm::style::Print;
 use crossterm::{execute, ExecutableCommand, QueueableCommand, cursor};
 use crossterm::terminal::{self, Clear};
 use crate::clientrs::{Client, ClientInput};
-use crate::draw::{header, status_bar, hint, StatusBar, Rect};
+use crate::draw::{header, hint, Rect};
 use crate::parser::{CommandParser, ParseError, Command};
 
 mod clientrs;
@@ -19,18 +20,23 @@ mod chat;
 mod draw;
 mod parser;
 
-fn fetch_message(client: &mut Client) {
+fn fetch_message(client: &mut Client, status_bar: &mut StatusBarBox) {
     if let Some(stream) = &mut client.stream {
         match read_message(stream) {
             Ok(m) => {
-                // hint(&mut stdout(), &client.window, &format!("Got {:?} from broadcast", msg)).expect("Failed rendering hint");
                 if m.message.is_some() {
                     let chat_message = chat::ChatMessage::default(m.message.unwrap(), m.timestamp, m.username);
                     client.chat_log.put_line(chat_message);
                 }
                 // TODO: this likely doesn't belong here
                 if let Some(n_conn) = m.connections {
-                    status_bar(&mut stdout(), &client.window, "Online", n_conn).expect("Failed rendering status bar");
+                    status_bar.patch(
+                        vec![
+                            StatusBarComponent::status("Online".to_owned()),
+                            StatusBarComponent::connected_clients(format!("{}", n_conn)),
+                            StatusBarComponent::login(client.login_name.clone().unwrap())
+                        ]
+                    ).render_rect(&mut stdout()).expect("Failed rendering status bar");
                 }
             },
             Err(e) => {
@@ -76,17 +82,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     terminal::enable_raw_mode()?;
     let mut client = Client::new();
     let mut client_input = ClientInput::new();
-    let mut stat_bar = StatusBar::new(Rect::new(client.window.width, client.window.height - 2), 0, 0, '|', "Status", "Clients connected");
+    let mut stat_bar = StatusBarBox::new(
+        Rect::new(0, client.window.height - 2, client.window.width, 1),
+        vec![
+            StatusBarComponent::status("Offline".to_owned()),
+            StatusBarComponent::connected_clients(format!("{}", 0)),
+            StatusBarComponent::login("Not logged in".to_owned()),
+        ]
+    );
     header(&mut stdout, &client.window, "Chad")?;
     stdout.flush()?;
     hint(&mut stdout, &client.window, "Type in /login <name> to join the fun")?;
-    stat_bar.render(&mut stdout, "Offline", 0)?;
+    stat_bar.render_rect(&mut stdout)?;
 
     loop {
         if poll(std::time::Duration::from_millis(50))? {
             match read()? {
                 Event::Key(event) => {
-                    fetch_message(&mut client);
+                    fetch_message(&mut client, &mut stat_bar);
                     render_chat(&client, &mut stdout)?;
                     match event.code {
                         KeyCode::Char(c) if event.modifiers.is_empty() => {
@@ -132,7 +145,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                                             match client.connect(socket_addr) {
                                                 Ok(_) => {
                                                     clear_prompt(&mut stdout, source.len() as u16)?;
-                                                    status_bar(&mut stdout, &client.window, "Online", 1)?;
+                                                    stat_bar.patch(
+                                                        vec![
+                                                            StatusBarComponent::status("Online".to_owned()),
+                                                            StatusBarComponent::connected_clients(format!("{}", 1)),
+                                                            StatusBarComponent::login(client.login_name.clone().unwrap()),
+                                                        ]
+                                                    ).render_rect(&mut stdout)?;
                                                     hint(&mut stdout, &client.window, "Connected")?;
                                                     continue;
                                                 },
@@ -187,7 +206,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 _ => {}
             }
         } else {
-            fetch_message(&mut client);
+            fetch_message(&mut client, &mut stat_bar);
             render_chat(&client, &mut stdout)?;
         }
     }
