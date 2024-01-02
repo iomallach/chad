@@ -1,5 +1,5 @@
 extern crate shared;
-use shared::{Message, ParseMessageError, ParseMessageErrorKind};
+use shared::Message;
 use shared::{read_message, send_message};
 use chrono::DateTime;
 use chrono::Local;
@@ -80,7 +80,7 @@ impl Server {
 
     fn read_message(&self, stream: &mut TcpStream) -> Result<Message, io::Error> {
         let msg = read_message(stream)?;
-        Ok(Message::from_str(&msg).expect("No issues here"))
+        Ok(msg)
     }
 
     fn register_listener(&mut self) -> Result<(), Box<dyn Error>> {
@@ -125,9 +125,13 @@ impl Server {
                     match self.register_client(stream) {
                         Ok(token) => {
                             println!("Accepted connection from {} with token {}", addr, <Token as Into<usize>>::into(token));
-                            let system_msg = Message::new("System", Some(self.clients.borrow().len()), Some("***WELCOME TO CHAD***")).to_string();
-                            send_message(system_msg.as_str(), &mut self.clients.borrow_mut().get_mut(&token).unwrap().stream).expect("Failed to write");
-                            println!("Sent message: {}", system_msg);
+                            let system_msg = Message::new("System", Some(self.clients.borrow().len()), Message::from_chrono(chrono::offset::Local::now()), Some("***WELCOME TO CHAD***"));
+                            send_message(system_msg.to_string().as_str(), &mut self.clients.borrow_mut().get_mut(&token).unwrap().stream).expect("Failed to write");
+                            println!("Sent message: {}", system_msg.to_string());
+
+                            let from  = self.clients.borrow().get(&token).as_ref().unwrap().login_name.clone();
+                            let joined_msg = Message::new("System", Some(self.clients.borrow().len()), Message::from_chrono(chrono::offset::Local::now()), Some(&format!("{} joined the chat!", from)));
+                            Self::broadcast_message("System", joined_msg, &mut self.clients.borrow_mut())
                         },
                         Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
                         Err(e) => eprintln!("Failed to register client: {} with {}", addr, e),
@@ -148,8 +152,8 @@ impl Server {
             println!("Got event on socket {:?} and address {} from {}", token, addr, socket.login_name);
             match read_message(&mut socket.stream) {
                 Ok(m) => {
-                    println!("Read from token={:?}, username {} saying {}", token, socket.login_name, m);
-                    Self::broadcast_message(&socket.login_name.clone(), Message::from_str(&m).unwrap(), &mut clients)
+                    println!("Read from token={:?}, username {} saying {}", token, socket.login_name, m.to_string());
+                    Self::broadcast_message(&socket.login_name.clone(), m, &mut clients)
                 },
                 Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
                     println!("Socket {:?} closed", token);
@@ -158,28 +162,15 @@ impl Server {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {},
                 Err(e) => { panic!("Unexpected error {}", e) }
             }
-            // match socket.stream.read(&mut buffer) {
-            //     Ok(0) => {
-            //         println!("Socket {:?} closed", token);
-            //         clients.remove(&token);
-            //     },
-            //     Ok(n) => {
-            //         println!("Read {} bytes from socket {:?} : {} saying {}", n, token, socket.login_name, String::from_utf8_lossy(&buffer));
-            //         Self::broadcast_message(&socket.login_name.clone(), &buffer[0..n], &mut clients)
-            //     },
-            //     Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-            //     },
-            //     e => panic!("Error reading from socket {:?}: {:?}", token, e)
-            // }
         }
     }
 
     fn broadcast_message(from: &str, message: Message, across: &mut HashMap<Token, Client>) {
-        across.iter().for_each(|(tok, client)| {
+        across.iter().for_each(|(_, client)| {
             let mut stream = &client.stream;
             if let Some(m) = &message.message {
                 println!("Broadcasting {} length", across.len());
-                let broadcast_message = Message::new(from, Some(across.len()), Some(m)).to_string();
+                let broadcast_message = Message::new(from, Some(across.len()), message.timestamp.clone(), Some(m)).to_string();
                 send_message(&broadcast_message, &mut stream).expect("Failed to write");
             }
         })

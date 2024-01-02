@@ -1,10 +1,8 @@
 extern crate shared;
 use crossterm::queue;
 use shared::read_message;
-use shared::Message;
 use std::io::Stdout;
 use std::io::{Write as _, self};
-use std::str::FromStr;
 use std::{net::SocketAddr, error::Error, io::stdout};
 use std::result::Result;
 use crossterm::cursor::{MoveTo, MoveDown, MoveLeft};
@@ -13,27 +11,25 @@ use crossterm::style::Print;
 use crossterm::{execute, ExecutableCommand, QueueableCommand, cursor};
 use crossterm::terminal::{self, Clear};
 use crate::clientrs::{Client, ClientInput};
-use crate::draw::{header, status_bar, hint};
+use crate::draw::{header, status_bar, hint, StatusBar, Rect};
 use crate::parser::{CommandParser, ParseError, Command};
 
 mod clientrs;
 mod chat;
 mod draw;
 mod parser;
-mod message_parser;
 
 fn fetch_message(client: &mut Client) {
     if let Some(stream) = &mut client.stream {
         match read_message(stream) {
             Ok(m) => {
-                let msg = Message::from_str(&m).expect("No fucking errors");
-                hint(&mut stdout(), &client.window, &format!("Got {:?} from broadcast", msg)).expect("Failed rendering hint");
-                if msg.has_message {
-                    let chat_message = chat::ChatMessage::default(msg.message.unwrap(), msg.timestamp, msg.username);
+                // hint(&mut stdout(), &client.window, &format!("Got {:?} from broadcast", msg)).expect("Failed rendering hint");
+                if m.message.is_some() {
+                    let chat_message = chat::ChatMessage::default(m.message.unwrap(), m.timestamp, m.username);
                     client.chat_log.put_line(chat_message);
                 }
                 // TODO: this likely doesn't belong here
-                if let Some(n_conn) = msg.connections {
+                if let Some(n_conn) = m.connections {
                     status_bar(&mut stdout(), &client.window, "Online", n_conn).expect("Failed rendering status bar");
                 }
             },
@@ -80,10 +76,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     terminal::enable_raw_mode()?;
     let mut client = Client::new();
     let mut client_input = ClientInput::new();
+    let mut stat_bar = StatusBar::new(Rect::new(client.window.width, client.window.height - 2), 0, 0, '|', "Status", "Clients connected");
     header(&mut stdout, &client.window, "Chad")?;
     stdout.flush()?;
     hint(&mut stdout, &client.window, "Type in /login <name> to join the fun")?;
-    status_bar(&mut stdout, &client.window, "Offline", 0)?;
+    stat_bar.render(&mut stdout, "Offline", 0)?;
 
     loop {
         if poll(std::time::Duration::from_millis(50))? {

@@ -1,15 +1,21 @@
 ## Random ideas
-- Number of connected clients [Checked, doesn't work, getting None. Probably a parse error]
-- Status bar "component" with evenly spaced writings
+- Number of connected clients [DONE]
+- Status bar "component" with evenly spaced writings [DONE][Requires coord refactoring]
 - Header "component"
 - Prompt is on the last line [DONE]
 - Allow capitalized letters [DONE]
 - Fix Connection reset by peer after read_message
+- Decompose Message into Headers and embed Headers into Message. Rename message field to be body instead
 
 ## Features
 - Authorization
 - Broadcasting "entered chat" message
 - Proper parser for messages
+- Show online users somewhere
+- In-message markdown support
+
+### Failures
+- Clients panic when a client disconnects on unwrap somewhere
 
 ### Parser idea
 "header1: value1 \r\n header2: value2 \r\n\r\n some message \r\n\r\n"

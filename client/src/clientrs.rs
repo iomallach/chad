@@ -72,9 +72,8 @@ impl Client {
             panic!("Already connected");
         }
         self.stream = Some(TcpStream::connect(socket_addr)?);
-        let msg = Message::without_message(self.login_name.as_ref().unwrap());
+        let msg = Message::new(self.login_name.as_ref().unwrap(), None, Message::from_chrono(chrono::Local::now()), None);
         self.stream.as_ref().unwrap().write_all(msg.to_string().as_bytes())?;
-        // write!(&mut self.stream.as_ref().unwrap(), "{}", msg.to_string())?;
         self.stream.as_ref().unwrap().set_nonblocking(true)?;
         Ok(())
     }
@@ -88,7 +87,7 @@ impl Client {
     }
 
     pub fn send_message(&mut self, message: &str) -> Result<(), io::Error> {
-        let msg = Message::new(self.login_name.as_ref().unwrap(), None, Some(message));
+        let msg = Message::new(self.login_name.as_ref().unwrap(), None, Message::from_chrono(chrono::Local::now()), Some(message));
         let see_msg = msg.to_string();
         send_message(msg.to_string().as_str(), self.stream.as_mut().unwrap())
     }
