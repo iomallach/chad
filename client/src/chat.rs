@@ -3,6 +3,9 @@ use std::collections::VecDeque;
 use crossterm::style::Color;
 use crossterm::style::{Stylize, style};
 
+use crate::screen::Rect;
+use crate::screen::screen_buffer::{ScreenBuffer, ScreenCell};
+
 #[derive(Debug)]
 pub struct MessagePiece {
     contents: String,
@@ -59,6 +62,28 @@ impl ChatMessage {
     pub fn system(msg: String, timestamp: String, username: String) -> Self {
         Self::new(msg, timestamp, username, Color::Red, Color::Black)
     }
+
+    pub fn as_cells(&self) -> Vec<ScreenCell> {
+        // TODO: duplicated code
+        let mut timestamp: Vec<_> = self.timestamp.contents.chars().map(|c| {
+            ScreenCell::new(c, self.timestamp.bg_color, self.timestamp.fg_color)
+        }).collect();
+        timestamp.push(ScreenCell::default());
+        let mut username: Vec<_> = self.username.contents.chars().map(|c| {
+            ScreenCell::new(c, self.username.bg_color, self.username.fg_color)
+        }).collect();
+        username.push(ScreenCell::default());
+        let mut msg: Vec<_> = self.msg.contents.chars().map(|c| {
+            ScreenCell::new(c, self.msg.bg_color, self.msg.fg_color)
+        }).collect();
+        let mut message_cells: Vec<ScreenCell> = Vec::new();
+
+        message_cells.extend(timestamp);
+        message_cells.extend(username);
+        message_cells.extend(msg);
+
+        message_cells
+    }
 }
 
 impl std::fmt::Display for ChatMessage {
@@ -72,17 +97,15 @@ impl std::fmt::Display for ChatMessage {
 
 pub struct ChatLog {
     lines: VecDeque<ChatMessage>,
-    height: usize,
-    width: usize,
+    rect: Rect,
     max_messages: usize
 }
 
 impl ChatLog {
-    pub fn new(height: usize, width: usize, max_messages: usize) -> Self {
+    pub fn new(rect: Rect, max_messages: usize) -> Self {
         Self {
             lines: VecDeque::new(),
-            height,
-            width,
+            rect,
             max_messages,
         }
     }
@@ -102,5 +125,20 @@ impl ChatLog {
 
     pub fn get(&self) -> &VecDeque<ChatMessage> {
         &self.lines
+    }
+
+    pub fn render(&self, buf: &mut ScreenBuffer) {
+        // TODO: this is flawed. Probably better to do it in the put line. The below code can lead to newer messages not being printed
+        let mut n_lines = 0_f32;
+        for (i, m) in self.lines.iter().enumerate() {
+            let message_cells = m.as_cells();
+            let need_lines = message_cells.len() as f32 / self.rect.w as f32;
+            n_lines += need_lines.ceil();
+            if n_lines > self.rect.h as f32 {
+                break
+            }
+            // TODO: this doesn't take into account cases where previous message occupied multiple lines
+            buf.put_cells(message_cells, self.rect.x.into(), self.rect.y as usize + i);
+        }
     }
 }

@@ -1,20 +1,26 @@
 extern crate shared;
 use shared::Message;
+use shared::read_message;
 use shared::send_message;
 use std::io;
 use std::{net::{SocketAddr, TcpStream}, error::Error};
 use std::io::Write;
 use crossterm::terminal;
 use crate::chat::ChatLog;
+use crate::screen::Rect;
+use crate::screen::screen_buffer::ScreenBuffer;
+use crate::screen::screen_buffer::ScreenCell;
 
 pub struct ClientInput {
     pub inner: Vec<char>,
+    rect: Rect,
 }
 
 impl ClientInput {
-    pub fn new() -> Self {
+    pub fn new(rect: Rect) -> Self {
         Self {
             inner: Vec::new(),
+            rect,
         }
     }
 
@@ -28,6 +34,18 @@ impl ClientInput {
 
     pub fn backspace(&mut self) {
         self.inner.pop();
+    }
+
+    pub fn render(&mut self, buf: &mut ScreenBuffer) {
+        let input_cells = self.inner.iter().map(|c| {
+            ScreenCell::new(*c, crossterm::style::Color::Black, crossterm::style::Color::White)
+        }).collect::<Vec<_>>();
+        buf.fill(ScreenCell::default(), self.rect.x.into(), self.rect.y.into(), self.rect.w.into());
+        buf.put_cells(input_cells, self.rect.x.into(), self.rect.y.into());
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear();
     }
 }
 
@@ -58,7 +76,8 @@ impl Client {
         Self {
             stream: None,
             login_name: None,
-            chat_log: ChatLog::new(height as usize, width as usize, 5),
+            // TODO: -4 is kind of a magic number, need to factor it out into configurations
+            chat_log: ChatLog::new(Rect::new(0, 1, width.into(), height as usize - 4), 10),
             window: Window::new(height as usize, width as usize),
         }
     }
@@ -88,7 +107,25 @@ impl Client {
 
     pub fn send_message(&mut self, message: &str) -> Result<(), io::Error> {
         let msg = Message::new(self.login_name.as_ref().unwrap(), None, Message::from_chrono(chrono::Local::now()), Some(message));
-        let see_msg = msg.to_string();
         send_message(msg.to_string().as_str(), self.stream.as_mut().unwrap())
+    }
+
+    pub fn fetch_message(&mut self) -> std::io::Result<Message> {
+        if let Some(stream) = &mut self.stream {
+            match read_message(stream) {
+                Ok(m) => {
+                    Ok(m)
+                },
+                Err(e) => {
+                    match e.kind() {
+                        io::ErrorKind::WouldBlock => Err(e),
+                        io::ErrorKind::BrokenPipe => Err(e),
+                        _ => panic!("Something went really wrong {:?}", e),
+                    }
+                }
+            }
+        } else {
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "You are offline"))
+        }
     }
 }

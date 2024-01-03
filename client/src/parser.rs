@@ -1,11 +1,13 @@
 use std::{str::Chars, iter::Peekable};
 
 #[derive(Debug)]
-pub enum ParseError {
+pub enum ParseResult {
     NotACommand,
     InvalidCommand,
     UnexpectedToken,
     NoArgument,
+    Command(Command),
+    EmptyInput,
 }
 
 #[derive(Debug)]
@@ -26,13 +28,19 @@ impl<'a> CommandParser<'a> {
         }
     }
 
-    pub fn next_command(&mut self) -> Result<Command, ParseError> {
+    pub fn next_command(&mut self) -> ParseResult {
+        if self.source.clone().collect::<Vec<char>>().is_empty() {
+            return ParseResult::EmptyInput
+        }
         if self.is_command() {
-            let command = self.parse_command()?;
+            let command = match self.parse_command() {
+                Ok(c) => c,
+                Err(e) => return e,
+            };
             let arg = self.parse_argument();
             self.map_command(command, arg)
         } else {
-            Err(ParseError::NotACommand)
+            ParseResult::NotACommand
         }
     }
 
@@ -45,14 +53,14 @@ impl<'a> CommandParser<'a> {
         }
     }
 
-    fn parse_command(&mut self) -> Result<String, ParseError> {
+    fn parse_command(&mut self) -> Result<String, ParseResult> {
         let mut command_buffer = String::new();
 
         while let Some(next) = self.source.next() {
             match next {
                 c if c.is_ascii_alphabetic() => command_buffer.push(c),
                 c if c.is_ascii_whitespace() => break,
-                _ => return Err(ParseError::UnexpectedToken),
+                _ => return Err(ParseResult::UnexpectedToken),
             }
         }
         Ok(command_buffer)
@@ -72,17 +80,17 @@ impl<'a> CommandParser<'a> {
         Some(command_arg_buffer)
     }
 
-    fn map_command(&self, command: String, arg: Option<String>) -> Result<Command, ParseError> {
+    fn map_command(&self, command: String, arg: Option<String>) -> ParseResult {
         match command.as_str() {
             "login" => {
                 match arg {
-                    Some(s) => Ok(Command::Login(s)),
-                    None => Err(ParseError::NoArgument)
+                    Some(s) => ParseResult::Command(Command::Login(s)),
+                    None => ParseResult::NoArgument
                 }
             }
-            "connect" => Ok(Command::Connect),
-            "disconnect" => Ok(Command::Disconnect),
-            _ => Err(ParseError::InvalidCommand),
+            "connect" => ParseResult::Command(Command::Connect),
+            "disconnect" => ParseResult::Command(Command::Disconnect),
+            _ => ParseResult::InvalidCommand,
         }
     }
 }
