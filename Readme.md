@@ -6,6 +6,7 @@
 - Allow capitalized letters [DONE]
 - Fix Connection reset by peer after read_message
 - Decompose Message into Headers and embed Headers into Message. Rename message field to be body instead
+- Put chat into a frame (draw indents around using some background color)
 
 ## Features
 - Authorization
@@ -13,9 +14,12 @@
 - Proper parser for messages [DONE]
 - Show online users somewhere
 - In-message markdown support
+- Put all constants into configuration (bar placements, max messages, etc)
 
 ### Failures
 - Clients panic when a client disconnects on unwrap somewhere
+- There is a bug when previous messages concat with new messages after popping from the queue -- supposedly, need to confirm
+- There are lots of warnings
 
 ### Parser idea
 "header1: value1 \r\n header2: value2 \r\n\r\n some message \r\n\r\n"

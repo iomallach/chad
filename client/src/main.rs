@@ -19,6 +19,7 @@ mod clientrs;
 mod chat;
 mod draw;
 mod parser;
+mod screen_buffer;
 
 fn fetch_message(client: &mut Client, status_bar: &mut StatusBarBox) {
     if let Some(stream) = &mut client.stream {
@@ -36,7 +37,7 @@ fn fetch_message(client: &mut Client, status_bar: &mut StatusBarBox) {
                             StatusBarComponent::connected_clients(format!("{}", n_conn)),
                             StatusBarComponent::login(client.login_name.clone().unwrap())
                         ]
-                    ).render_rect(&mut stdout()).expect("Failed rendering status bar");
+                    ).render(&mut stdout()).expect("Failed rendering status bar");
                 }
             },
             Err(e) => {
@@ -55,10 +56,12 @@ fn render_chat(client: &Client, stdout: &mut Stdout) -> Result<(), Box<dyn Error
         stdout.queue(cursor::SavePosition)?;
         stdout.queue(cursor::Hide)?;
         stdout.queue(MoveTo(0, 2))?;
+        stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine))?;
         for m in client.chat_log.get() {
             stdout.queue(Print(m))?;
             stdout.queue(MoveDown(1))?;
             stdout.queue(MoveLeft(client.window.width as u16))?;
+            stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine))?;
         }
         stdout.queue(cursor::RestorePosition)?;
         stdout.queue(cursor::Show)?;
@@ -93,7 +96,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     header(&mut stdout, &client.window, "Chad")?;
     stdout.flush()?;
     hint(&mut stdout, &client.window, "Type in /login <name> to join the fun")?;
-    stat_bar.render_rect(&mut stdout)?;
+    stat_bar.render(&mut stdout)?;
 
     loop {
         if poll(std::time::Duration::from_millis(50))? {
@@ -151,7 +154,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                                             StatusBarComponent::connected_clients(format!("{}", 1)),
                                                             StatusBarComponent::login(client.login_name.clone().unwrap()),
                                                         ]
-                                                    ).render_rect(&mut stdout)?;
+                                                    ).render(&mut stdout)?;
                                                     hint(&mut stdout, &client.window, "Connected")?;
                                                     continue;
                                                 },

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crossterm::style::Color;
 use crossterm::style::{Stylize, style};
 
@@ -69,30 +71,36 @@ impl std::fmt::Display for ChatMessage {
 }
 
 pub struct ChatLog {
-    lines: Vec<ChatMessage>,
+    lines: VecDeque<ChatMessage>,
     height: usize,
     width: usize,
+    max_messages: usize
 }
 
 impl ChatLog {
-    pub fn new(height: usize, width: usize) -> Self {
+    pub fn new(height: usize, width: usize, max_messages: usize) -> Self {
         Self {
-            lines: Vec::new(),
+            lines: VecDeque::new(),
             height,
             width,
+            max_messages,
         }
     }
 
     pub fn put_line(&mut self, line: ChatMessage) {
-        // TODO: make it limited to height
-        self.lines.push(line);
+        if self.lines.len() + 1 > self.max_messages {
+            self.lines.pop_front();
+            self.lines.push_back(line)
+        } else {
+            self.lines.push_back(line);
+        }
     }
 
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
     }
 
-    pub fn get(&self) -> &[ChatMessage] {
+    pub fn get(&self) -> &VecDeque<ChatMessage> {
         &self.lines
     }
 }

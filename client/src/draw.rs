@@ -132,7 +132,7 @@ impl StatusBarBox {
         }
     }
 
-    pub fn render_rect(&mut self, stdout: &mut Stdout) -> Result<(), Box<dyn Error>> {
+    pub fn render(&mut self, stdout: &mut Stdout) -> Result<(), Box<dyn Error>> {
         queue!(
             stdout,
             MoveTo(self.rect.x, self.rect.y),

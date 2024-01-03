@@ -58,7 +58,7 @@ impl Client {
         Self {
             stream: None,
             login_name: None,
-            chat_log: ChatLog::new(height as usize, width as usize),
+            chat_log: ChatLog::new(height as usize, width as usize, 5),
             window: Window::new(height as usize, width as usize),
         }
     }
