@@ -11,6 +11,7 @@
 ## Features
 - Authorization
 - Broadcasting "entered chat" message [DONE]
+- "Left the chat" message
 - Proper parser for messages [DONE]
 - Show online users somewhere
 - In-message markdown support

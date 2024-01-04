@@ -38,9 +38,9 @@ impl ClientInput {
 
     pub fn render(&mut self, buf: &mut ScreenBuffer) {
         let input_cells = self.inner.iter().map(|c| {
-            ScreenCell::new(*c, crossterm::style::Color::Black, crossterm::style::Color::White)
+            ScreenCell::new(*c, crossterm::style::Color::Reset, crossterm::style::Color::White)
         }).collect::<Vec<_>>();
-        buf.fill(ScreenCell::default(), self.rect.x.into(), self.rect.y.into(), self.rect.w.into());
+        buf.fill(ScreenCell::default(), self.rect.x as usize + input_cells.len(), self.rect.y.into(), self.rect.w.into());
         buf.put_cells(input_cells, self.rect.x.into(), self.rect.y.into());
     }
 
@@ -67,7 +67,7 @@ pub struct Client {
     pub stream: Option<TcpStream>,
     pub login_name: Option<String>,
     pub chat_log: ChatLog,
-    pub window: Window,
+    pub window: Rect,
 }
 
 impl Client {
@@ -77,8 +77,9 @@ impl Client {
             stream: None,
             login_name: None,
             // TODO: -4 is kind of a magic number, need to factor it out into configurations
-            chat_log: ChatLog::new(Rect::new(0, 1, width.into(), height as usize - 4), 10),
-            window: Window::new(height as usize, width as usize),
+            chat_log: ChatLog::new(Rect::new(2, 2, width as usize - 2, height as usize - 7), 10),
+            window: Rect::new(0, 0, width as usize, height as usize)
+            // Window::new(height as usize, width as usize),
         }
     }
 

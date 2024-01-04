@@ -1,6 +1,8 @@
 use crossterm::style;
 
 pub mod screen_buffer;
+pub mod chat_frame;
+pub mod hint;
 
 #[derive(Clone)]
 pub struct Rect {
@@ -17,6 +19,17 @@ impl Rect {
             y: y as u16,
             w: w as u16,
             h: h as u16,
+        }
+    }
+
+    pub fn subrect(&self, offset_x: usize, offset_y: usize, offset_w: usize, offset_h: usize) -> Self {
+        assert!(self.w > offset_w as u16, "Width offset {} can not be greater than width {}", offset_w, self.w);
+        assert!(self.h > offset_h as u16, "Width offset {} can not be greater than width {}", offset_h, self.h);
+        Self {
+            x: self.x + offset_x as u16,
+            y: self.y + offset_y as u16,
+            w: self.w - offset_w as u16,
+            h: self.h - offset_h as u16,
         }
     }
 }
@@ -109,6 +122,7 @@ impl BarComponent {
         let mut col_cursor: usize = self.rect.x.into();
         let content_length = self.display.len() + self.value.len() + 2;
         let empty_space = self.rect.w as usize - content_length + 1;
+        buf.fill_row(screen_buffer::ScreenCell::bar_cell(' ', style::Color::White), self.rect.y.into(), None, None);
         buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2], col_cursor.into(), self.rect.y.into());
         col_cursor += empty_space / 2;
         buf.put_cells(self.display.clone(), col_cursor, self.rect.y.into());
@@ -155,6 +169,7 @@ impl BarBox {
         for p in patches.iter_mut() {
             for c in self.components.iter_mut() {
                 if p.kind == c.kind {
+                    p.rect = c.rect.clone();
                     *c = p.clone();
                 }
             }

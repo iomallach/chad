@@ -23,15 +23,15 @@ impl MessagePiece {
     }
 
     fn message(contents: String) -> Self {
-        Self::new(contents, Color::White, Color::Black)
+        Self::new(contents, Color::White, Color::Reset)
     }
 
     fn username(contents: String) -> Self {
-        Self::new(contents, Color::Green, Color::Black)
+        Self::new(contents, Color::Green, Color::Reset)
     }
 
     fn timestamp(contents: String) -> Self {
-        Self::new(contents, Color::DarkYellow, Color::Black)
+        Self::new(contents, Color::DarkYellow, Color::Reset)
     }
 }
 
@@ -56,11 +56,11 @@ impl ChatMessage {
     }
 
     pub fn default(msg: String, timestamp: String, username: String) -> Self {
-        Self::new(msg, timestamp, username, Color::White, Color::Black)
+        Self::new(msg, timestamp, username, Color::White, Color::Reset)
     }
 
     pub fn system(msg: String, timestamp: String, username: String) -> Self {
-        Self::new(msg, timestamp, username, Color::Red, Color::Black)
+        Self::new(msg, timestamp, username, Color::Red, Color::Reset)
     }
 
     pub fn as_cells(&self) -> Vec<ScreenCell> {
