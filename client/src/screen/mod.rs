@@ -126,18 +126,18 @@ impl BarComponent {
         let mut col_cursor: usize = self.rect.x.into();
         let content_length = self.display.len() + self.value.len() + 2;
         let empty_space = self.rect.w as usize - content_length + 1;
-        buf.fill_row(screen_buffer::ScreenCell::bar_cell(' ', style::Color::White), self.rect.y.into(), None, None);
-        buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2], col_cursor.into(), self.rect.y.into());
+        buf.fill_row(screen_buffer::ScreenCell::bar_cell(' ', style::Color::White), self.rect.y, Some(self.rect.x), Some(self.rect.x + self.rect.w));
+        buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2], col_cursor, self.rect.y);
         col_cursor += empty_space / 2;
-        buf.put_cells(self.display.clone(), col_cursor, self.rect.y.into());
+        buf.put_cells(self.display.clone(), col_cursor, self.rect.y);
         col_cursor += self.display.len();
-        buf.put_cell(screen_buffer::ScreenCell::bar_cell(self.delim, style::Color::White), col_cursor, self.rect.y.into());
+        buf.put_cell(screen_buffer::ScreenCell::bar_cell(self.delim, style::Color::Black), col_cursor, self.rect.y);
         col_cursor += 1;
-        buf.put_cell(screen_buffer::ScreenCell::bar_empty_space(), col_cursor, self.rect.y.into());
+        buf.put_cell(screen_buffer::ScreenCell::bar_empty_space(), col_cursor, self.rect.y);
         col_cursor += 1;
-        buf.put_cells(self.value.clone(), col_cursor, self.rect.y.into());
+        buf.put_cells(self.value.clone(), col_cursor, self.rect.y);
         col_cursor += self.value.len();
-        buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2 - 1], col_cursor.into(), self.rect.y.into())
+        buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2 - 1], col_cursor, self.rect.y)
     }
 }
 
