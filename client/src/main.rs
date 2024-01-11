@@ -10,12 +10,11 @@ use crossterm::cursor::MoveTo;
 use crossterm::event::{read, poll, Event, KeyCode, KeyModifiers};
 use crossterm::{execute, QueueableCommand};
 use crossterm::terminal;
-use crate::clientrs::{Client, ClientInput};
+use crate::client::{Client, ClientInput};
 use crate::parser::{CommandParser, Command};
 
-mod clientrs;
+mod client;
 mod chat;
-mod draw;
 mod parser;
 mod screen;
 
