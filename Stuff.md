@@ -6,7 +6,7 @@
 - Allow capitalized letters [DONE]
 - Fix Connection reset by peer after read_message
 - Decompose Message into Headers and embed Headers into Message. Rename message field to be body instead
-- Put chat into a frame (draw indents around using some background color)
+- Put chat into a frame (draw indents around using some background color) [DONE]
 
 ## Features
 - Authorization
@@ -16,6 +16,7 @@
 - Show online users somewhere
 - In-message markdown support
 - Put all constants into configuration (bar placements, max messages, etc)
+- Resize
 
 ### Failures
 - Clients panic when a client disconnects on unwrap somewhere
