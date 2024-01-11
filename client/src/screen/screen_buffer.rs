@@ -1,11 +1,12 @@
-use std::io::Write;
+use std::{io::Write, ops::Deref};
+use itertools::Itertools;
 
 use crossterm::{style::{self, Stylize, Print}, QueueableCommand};
 
 pub struct ScreenBuffer {
     buf: Vec<ScreenCell>,
     w: usize,
-    diff: Vec<ChangedScreenCell>
+    diff: Vec<ChangedScreenCell>,
 }
 
 impl ScreenBuffer {
@@ -35,17 +36,17 @@ impl ScreenBuffer {
                 self.fill(
                     cell, 
                     lb, 
-                    row * self.w, 
+                    row, 
                     rb - lb
                 )
             },
             (Some(lb), None) => {
-                self.fill(cell, lb, row * self.w, self.w - lb)
+                self.fill(cell, lb, row, self.w - lb)
             },
             (None, Some(rb)) => {
-                self.fill(cell, 0, row * self.w, rb)
+                self.fill(cell, 0, row, rb)
             },
-            (None, None) => self.fill(cell, 0, row * self.w, self.w),
+            (None, None) => self.fill(cell, 0, row, self.w),
         }
     }
 // [][][x][][] -> (0, 2) 2
@@ -104,11 +105,18 @@ impl ScreenBuffer {
         self.diff.clear()
     }
 
-    pub fn render_diff(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub fn render_diff(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        // TODO: use either 2 buffers or a specail Diff struct instead. It's ug;y
+        self.diff.sort_by_key(|el| (el.y, el.x));
+        let mut dedup_diff: Vec<ChangedScreenCell> = Vec::new();
+        for (_, group) in &self.diff.iter().group_by(|el| (el.x, el.y)) {
+            let g = group.last().unwrap();
+            dedup_diff.push(g.clone());
+        }
         stdout.queue(crossterm::cursor::Hide)?;
         let mut x_prev = 0;
         let mut y_prev = 0;
-        for cell in &self.diff {
+        for cell in dedup_diff {
             if cell.x.checked_sub(1).unwrap_or(0) != x_prev || cell.y != y_prev {
                 stdout.queue(crossterm::cursor::MoveTo(cell.x as u16, cell.y as u16))?;
             }
@@ -157,8 +165,23 @@ impl PartialEq for ScreenCell {
     }
 }
 
+#[derive(Clone)]
 struct ChangedScreenCell {
     cell: ScreenCell,
     x: usize,
     y: usize,
 }
+
+// impl PartialOrd for ChangedScreenCell {
+//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+//         if self.x == other.x && self.y == other.y {
+//             return Some(std::cmp::Ordering::Equal);
+//         }
+//         if self.y >= other.y && self.x > other.x {
+//             return Some(std::cmp::Ordering::Greater);
+//         }
+//         else {
+//             return Some(std::cmp::Ordering::Less);
+//         }
+//     }
+// }

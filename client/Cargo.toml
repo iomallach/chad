@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.31"
 crossterm = "0.27.0"
+itertools = "0.12.0"
 shared = { path ="../shared" }

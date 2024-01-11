@@ -6,31 +6,35 @@ pub mod hint;
 
 #[derive(Clone)]
 pub struct Rect {
-    pub x: u16,
-    pub y: u16,
-    pub w: u16,
-    pub h: u16,
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
 }
 
 impl Rect {
     pub fn new(x: usize, y: usize, w: usize, h: usize) -> Self {
         Self {
-            x: x as u16,
-            y: y as u16,
-            w: w as u16,
-            h: h as u16,
+            x,
+            y,
+            w,
+            h,
         }
     }
 
     pub fn subrect(&self, offset_x: usize, offset_y: usize, offset_w: usize, offset_h: usize) -> Self {
-        assert!(self.w > offset_w as u16, "Width offset {} can not be greater than width {}", offset_w, self.w);
-        assert!(self.h > offset_h as u16, "Width offset {} can not be greater than width {}", offset_h, self.h);
+        assert!(self.w > offset_w, "Width offset {} can not be greater than width {}", offset_w, self.w);
+        assert!(self.h > offset_h, "Width offset {} can not be greater than width {}", offset_h, self.h);
         Self {
-            x: self.x + offset_x as u16,
-            y: self.y + offset_y as u16,
-            w: self.w - offset_w as u16,
-            h: self.h - offset_h as u16,
+            x: self.x + offset_x,
+            y: self.y + offset_y,
+            w: self.w - offset_w,
+            h: self.h - offset_h,
         }
+    }
+
+    pub fn null() -> Self {
+        Self::new(0, 0, 0, 0)
     }
 }
 
@@ -147,8 +151,8 @@ impl BarBox {
         let components_len = components.len();
         for i in 0..components_len {
             if let Some(comp) = components.get_mut(i) {
-                let component_width = rect.w / components_len as u16;
-                let cursor_x_pos = rect.x + component_width * i as u16;
+                let component_width = rect.w / components_len;
+                let cursor_x_pos = rect.x + component_width * i;
                 comp.rect = Rect::new(cursor_x_pos.into(), rect.y.into(), component_width.into(), rect.h.into());
             }
         }

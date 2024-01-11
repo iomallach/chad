@@ -11,7 +11,6 @@ use crossterm::event::{read, poll, Event, KeyCode, KeyModifiers};
 use crossterm::{execute, QueueableCommand};
 use crossterm::terminal;
 use crate::clientrs::{Client, ClientInput};
-use crate::draw::hint;
 use crate::parser::{CommandParser, Command};
 
 mod clientrs;
@@ -42,37 +41,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut stdout = stdout();
     let _terminal_state = TerminalState::enter()?;
     let mut client = Client::new();
-    let mut screen_buf = screen::screen_buffer::ScreenBuffer::default(client.window.w as usize, client.window.h as usize);
+    let mut screen_buf = screen::screen_buffer::ScreenBuffer::default(client.window.w, client.window.h);
     let mut status_bar = screen::BarBox::new(
-        client.window.subrect(0, client.window.h as usize - 2, 0, client.window.h as usize - 1),
-        // screen::Rect::new(0, client.window.h as usize - 2, client.window.w as usize, client.window.h as usize),
+        client.window.subrect(0, client.window.h - 2, 0, client.window.h - 1),
         vec![
-            screen::BarComponent::status("Offline".to_owned(), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize)),
-            screen::BarComponent::connected_clients(format!("{}", 0), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize)),
-            screen::BarComponent::login("Not logged in".to_owned(), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize))
+            screen::BarComponent::status("Offline".to_owned(), screen::Rect::null()),
+            screen::BarComponent::connected_clients(format!("{}", 0), screen::Rect::null()),
+            screen::BarComponent::login("Not logged in".to_owned(), screen::Rect::null())
         ]
     );
     let mut header_bar = screen::BarBox::new(
-        screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize),
+        client.window.subrect(0, 0, 0, client.window.h - 1),
         vec![
-            screen::BarComponent::header("Chad".to_owned(), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize))
+            screen::BarComponent::header("Chad".to_owned(), screen::Rect::new(0, 0, client.window.w , client.window.h ))
         ]
     );
-    let mut hint = Hint::new("Type in /login <name> to join the fun", screen::Rect::new(2, 2, client.window.w as usize - 4, 1));
-    let mut client_input = ClientInput::new(screen::Rect::new(0, client.window.h as usize - 1, client.window.w as usize, 1));
-    let chat_frame = ChatFrame::new(&screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize));
-    // let mut stat_bar = StatusBarBox::new(
-    //     Rect::new(0, client.window.height - 2, client.window.width, 1),
-    //     vec![
-    //         StatusBarComponent::status("Offline".to_owned()),
-    //         StatusBarComponent::connected_clients(format!("{}", 0)),
-    //         StatusBarComponent::login("Not logged in".to_owned()),
-    //     ]
-    // );
-    // header(&mut stdout, &client.window, "Chad")?;
-    // stdout.flush()?;
-    // hint(&mut stdout, &client.window, "Type in /login <name> to join the fun")?;
-    // stat_bar.render(&mut stdout)?;
+    let mut hint = Hint::new(
+        "Type in /login <name> to join the fun",
+        client.window.subrect(2, 2, 4, client.window.h - 1),
+    );
+    let mut client_input = ClientInput::new(
+        client.window.subrect(0, client.window.h - 1, 0, client.window.h - 1),
+    );
+    let chat_frame = ChatFrame::new(&screen::Rect::new(0, 0, client.window.w , client.window.h ));
+
     hint.render(&mut screen_buf);
     chat_frame.render(&mut screen_buf);
     status_bar.render(&mut screen_buf);
@@ -83,23 +75,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     stdout.flush()?;
 
     loop {
-        if poll(std::time::Duration::from_millis(100))? {
+        if poll(std::time::Duration::from_millis(200))? {
             match read()? {
                 Event::Key(event) => {
-                    // fetch_message(&mut client, &mut stat_bar);
-                    // render_chat(&client, &mut stdout)?;
                     match event.code {
                         KeyCode::Char(c) if event.modifiers.is_empty() => {
                             client_input.push(c);
-                            // stdout.execute(Print(c))?;
                         }
                         KeyCode::Char(c) if event.modifiers.contains(KeyModifiers::SHIFT) => {
                             client_input.push_uppercase(c.to_uppercase());
-                            // stdout.execute(Print(c.to_uppercase()))?;
                         }
                         KeyCode::Backspace => {
                             client_input.backspace();
-                            // clear_prompt(&mut stdout, 1)?;
                         }
                         KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                             break;
@@ -114,39 +101,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                                             if client.stream.is_some() {
                                                 client.disconnect()?;
                                                 hint.patch("Disconnected");
-                                                // hint(&mut stdout, &client.window, "Disconnected")?;
                                             } else {
                                                 hint.patch("Not connected");
-                                                // hint(&mut stdout, &client.window, "Not connected")?;
                                             }
-                                            // clear_prompt(&mut stdout, source.len() as u16)?;
                                         }
                                         Command::Connect => {
                                             if client.login_name.is_none() {
-                                                // clear_prompt(&mut stdout, source.len() as u16)?;
                                                 client_input.clear();
                                                 hint.patch("You are not logged in, login via /login");
-                                                // hint(&mut stdout, &client.window, "You are not logged in, login via /login")?;
                                                 continue;
                                             }
                                             let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
                                             match client.connect(socket_addr) {
                                                 Ok(_) => {
-                                                    // clear_prompt(&mut stdout, source.len() as u16)?;
-                                                    // stat_bar.patch(
-                                                    //     vec![
-                                                    //         StatusBarComponent::status("Online".to_owned()),
-                                                    //         StatusBarComponent::connected_clients(format!("{}", 1)),
-                                                    //         StatusBarComponent::login(client.login_name.clone().unwrap()),
-                                                    //     ]
-                                                    // ).render(&mut stdout)?;
                                                     hint.patch("Connected");
-                                                    // hint(&mut stdout, &client.window, "Connected")?;
                                                 },
                                                 Err(e) => {
-                                                    // clear_prompt(&mut stdout, source.len() as u16)?;
                                                     hint.patch(&format!("{}", e));
-                                                    // hint(&mut stdout, &client.window, &e.to_string())?;
                                                 }
                                             }
                                             client_input.clear();
@@ -154,36 +125,26 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         Command::Login(l) => {
                                             client.login(&l);
                                             client_input.clear();
-                                            // clear_prompt(&mut stdout, source.len() as u16)?;
                                             hint.patch(&format!("Logged in as {}, now connect via /connect", l));
-                                            // hint(&mut stdout, &client.window, &format!("Logged in as {}, now connect via /connect", l))?;
                                         }
                                     }
                                 },
                                 ParseResult::InvalidCommand => {
-                                    // clear_prompt(&mut stdout, source.len() as u16)?;
                                     hint.patch("No such command, try /login or /connect");
-                                    // hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
                                 },
                                 ParseResult::NoArgument => {
-                                    // clear_prompt(&mut stdout, source.len() as u16)?;
                                     hint.patch("No argument provided for /login");
-                                    // hint(&mut stdout, &client.window, "No argument provided for /login")?;
                                 },
                                 ParseResult::NotACommand => {
-                                    // clear_prompt(&mut stdout, source.len() as u16)?;
                                     // TODO: move enirely into send_message
                                     if let Some(_) = client.stream {
                                         client.send_message(&source)?;
                                     } else {
                                         hint.patch("You are offline, connect with /connect");
-                                        // hint(&mut stdout, &client.window, "You are offline, connect with /connect")?;
                                     }
                                 },
                                 ParseResult::UnexpectedToken => {
-                                    // clear_prompt(&mut stdout, source.len() as u16)?;
                                     hint.patch("No such command, try /login or /connect");
-                                    // hint(&mut stdout, &client.window, "No such command, try /login or /connect")?;
                                 },
                                 ParseResult::EmptyInput => {},
                             }
@@ -198,8 +159,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         if client.stream.is_none() {
             status_bar.patch(
                 vec![
-                    BarComponent::status("Offline".to_owned(), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize)),
-                    BarComponent::connected_clients(format!("{}", 0), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize))
+                    BarComponent::status("Offline".to_owned(), screen::Rect::null()),
+                    BarComponent::connected_clients(format!("{}", 0), screen::Rect::null())
                 ]
             ).render(&mut screen_buf);
         }
@@ -212,9 +173,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 if let Some(n_conn) = m.connections {
                     status_bar.patch(
                         vec![
-                            BarComponent::status("Online".to_owned(), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize)),
-                            BarComponent::connected_clients(format!("{}", n_conn), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize)),
-                            BarComponent::login(client.login_name.clone().unwrap(), screen::Rect::new(0, 0, client.window.w as usize, client.window.h as usize))
+                            BarComponent::status("Online".to_owned(), screen::Rect::null()),
+                            BarComponent::connected_clients(format!("{}", n_conn), screen::Rect::null()),
+                            BarComponent::login(client.login_name.clone().unwrap(), screen::Rect::null())
                         ]
                     ).render(&mut screen_buf);
                 }

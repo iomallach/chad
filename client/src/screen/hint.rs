@@ -23,7 +23,7 @@ impl Hint {
         let cells = self.value.chars().map(|c| {
             ScreenCell::new(c, Color::Reset, Color::Magenta)
         }).collect::<Vec<_>>();
-        buf.fill_row(ScreenCell::default(), self.rect.y.into(), Some(self.rect.x.into()), Some(self.rect.w.into()));
-        buf.put_cells(cells, self.rect.x.into(), self.rect.y.into());
+        buf.fill_row(ScreenCell::default(), self.rect.y, Some(self.rect.x), Some(self.rect.w));
+        buf.put_cells(cells, self.rect.x, self.rect.y);
     }
 }

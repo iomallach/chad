@@ -138,7 +138,12 @@ impl ChatLog {
                 break
             }
             // TODO: this doesn't take into account cases where previous message occupied multiple lines
-            buf.put_cells(message_cells, self.rect.x.into(), self.rect.y as usize + i);
+            buf.fill_row(
+                ScreenCell::default(),
+                self.rect.y + i,
+                Some(self.rect.x),
+                Some(self.rect.w - self.rect.x));
+            buf.put_cells(message_cells, self.rect.x, self.rect.y + i);
         }
     }
 }
