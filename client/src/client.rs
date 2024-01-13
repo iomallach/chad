@@ -14,6 +14,7 @@ use crate::screen::screen_buffer::ScreenCell;
 pub struct ClientInput {
     pub inner: Vec<char>,
     rect: Rect,
+    cursor: usize,
 }
 
 impl ClientInput {
@@ -21,19 +22,45 @@ impl ClientInput {
         Self {
             inner: Vec::new(),
             rect,
+            cursor: 0,
         }
     }
 
-    pub fn push(&mut self, ch: char) {
-        self.inner.push(ch)
-    }
-
-    pub fn push_uppercase(&mut self, ch: std::char::ToUppercase) {
-        self.inner.extend(ch)
-    }
-
     pub fn backspace(&mut self) {
-        self.inner.pop();
+        if self.cursor > 0 {
+            self.cursor -= 1;
+            self.inner.remove(self.cursor);
+        }
+    }
+
+    pub fn backspace_forward(&mut self) {
+        if self.inner.len() > 0 && self.cursor < self.inner.len() {
+            self.inner.remove(self.cursor);
+        }
+    }
+
+    pub fn insert(&mut self, elem: char) {
+        self.inner.insert(self.cursor, elem);
+        self.cursor += 1;
+    }
+
+    pub fn insert_uppercase(&mut self, ch: std::char::ToUppercase) {
+        for (idx, c) in ch.enumerate() {
+            self.inner.insert(self.cursor + idx, c);
+        }
+        self.cursor += 1;
+    }
+
+    pub fn left(&mut self) {
+        if self.cursor > 0 {
+            self.cursor -= 1;
+        }
+    }
+
+    pub fn right(&mut self) {
+        if self.cursor < self.inner.len() {
+            self.cursor += 1;
+        }
     }
 
     pub fn render(&mut self, buf: &mut ScreenBuffer) {
@@ -46,6 +73,11 @@ impl ClientInput {
 
     pub fn clear(&mut self) {
         self.inner.clear();
+        self.cursor = 0;
+    }
+
+    pub fn position(&self) -> usize {
+        self.cursor
     }
 }
 

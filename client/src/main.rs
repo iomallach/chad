@@ -79,13 +79,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Event::Key(event) => {
                     match event.code {
                         KeyCode::Char(c) if event.modifiers.is_empty() => {
-                            client_input.push(c);
+                            client_input.insert(c);
                         }
                         KeyCode::Char(c) if event.modifiers.contains(KeyModifiers::SHIFT) => {
-                            client_input.push_uppercase(c.to_uppercase());
+                            client_input.insert_uppercase(c.to_uppercase());
+                        }
+                        KeyCode::Char('d') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+                            client_input.backspace_forward();
                         }
                         KeyCode::Backspace => {
                             client_input.backspace();
+                        }
+                        KeyCode::Left => {
+                            client_input.left();
+                        }
+                        KeyCode::Right => {
+                            client_input.right();
                         }
                         KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
                             break;
@@ -192,7 +201,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // screen_buf.render(&mut stdout)?;
         screen_buf.render_diff(&mut stdout)?;
         screen_buf.reset_diff();
-        stdout.queue(MoveTo(client_input.inner.len() as u16, client.window.h as u16 - 1))?;
+        stdout.queue(MoveTo(client_input.position() as u16, client.window.h as u16 - 1))?;
         stdout.flush()?;
     }
 
