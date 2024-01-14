@@ -1,12 +1,10 @@
-use std::{io::Write, ops::Deref};
-use itertools::Itertools;
+use std::io::Write;
 
 use crossterm::{style::{self, Stylize, Print}, QueueableCommand};
 
 pub struct ScreenBuffer {
     buf: Vec<ScreenCell>,
     w: usize,
-    diff: Vec<ChangedScreenCell>,
 }
 
 impl ScreenBuffer {
@@ -14,7 +12,6 @@ impl ScreenBuffer {
         Self {
             buf: vec![ScreenCell::default(); w * h],
             w,
-            diff: Vec::new(),
         }
     }
 
@@ -66,15 +63,10 @@ impl ScreenBuffer {
     pub fn put_cell(&mut self, cell: ScreenCell, x: usize, y: usize) {
         if let Some(c) = self.buf.get_mut(self.w * y + x) {
             if *c != cell {
-                self.diff.push(
-                    ChangedScreenCell {
-                        cell: cell.clone(),
-                        x,
-                        y,
-                    }
-                )
+                *c = ScreenCell::new(cell.ch, cell.bg, cell.fg, true);
+            } else {
+                *c = ScreenCell::new(cell.ch, cell.bg, cell.fg, false);
             }
-            *c = cell;
         }
     }
 
@@ -102,27 +94,27 @@ impl ScreenBuffer {
     }
 
     pub fn reset_diff(&mut self) {
-        self.diff.clear()
+        self.buf.iter_mut().for_each(|c| {
+            c.updated = false;
+        })
     }
 
     pub fn render_diff(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
-        // TODO: use either 2 buffers or a specail Diff struct instead. It's ug;y
-        self.diff.sort_by_key(|el| (el.y, el.x));
-        let mut dedup_diff: Vec<ChangedScreenCell> = Vec::new();
-        for (_, group) in &self.diff.iter().group_by(|el| (el.x, el.y)) {
-            let g = group.last().unwrap();
-            dedup_diff.push(g.clone());
-        }
+        let diff: Vec<(usize, usize, &ScreenCell)> = self.buf.iter()
+                                                            .enumerate()
+                                                            .filter(|(_, c)| c.updated)
+                                                            .map(|(idx, c)| (idx % self.w, idx / self.w, c))
+                                                            .collect();
         stdout.queue(crossterm::cursor::Hide)?;
-        let mut x_prev = 0;
-        let mut y_prev = 0;
-        for cell in dedup_diff {
-            if cell.x.checked_sub(1).unwrap_or(0) != x_prev || cell.y != y_prev {
-                stdout.queue(crossterm::cursor::MoveTo(cell.x as u16, cell.y as u16))?;
+        let mut x_prev: usize = 0;
+        let mut y_prev: usize = 0;
+        for (x, y, cell) in diff {
+            if x.checked_sub(1).unwrap_or(0) != x_prev || y != y_prev {
+                stdout.queue(crossterm::cursor::MoveTo(x as u16, y as u16))?;
             }
-            stdout.queue(Print(cell.cell.ch.with(cell.cell.fg).on(cell.cell.bg)))?;
-            x_prev = cell.x;
-            y_prev = cell.y;
+            stdout.queue(Print(cell.ch.with(cell.fg).on(cell.bg)))?;
+            x_prev = x;
+            y_prev = y;
         }
         stdout.queue(crossterm::cursor::Show)?;
         stdout.flush()?;
@@ -135,23 +127,25 @@ pub struct ScreenCell {
     ch: char,
     bg: style::Color,
     fg: style::Color,
+    updated: bool,
 }
 
 impl ScreenCell {
-    pub fn new(ch: char, bg: style::Color, fg: style::Color) -> Self {
+    pub fn new(ch: char, bg: style::Color, fg: style::Color, updated: bool) -> Self {
         Self {
             ch,
             bg,
             fg,
+            updated,
         }
     }
 
     pub fn default() -> Self {
-        Self::new(' ', style::Color::Reset, style::Color::White)
+        Self::new(' ', style::Color::Reset, style::Color::White, true)
     }
 
     pub fn bar_cell(ch: char, fg: style::Color) -> Self {
-        Self::new(ch, style::Color::White, fg)
+        Self::new(ch, style::Color::White, fg, true)
     }
 
     pub fn bar_empty_space() -> Self {
@@ -161,27 +155,6 @@ impl ScreenCell {
 
 impl PartialEq for ScreenCell {
     fn eq(&self, other: &Self) -> bool {
-        self.ch == other.ch && self.bg == other.bg && self.fg == other.fg
+        self.ch == other.ch && self.bg == other.bg && self.fg == other.fg && self.updated == other.updated
     }
 }
-
-#[derive(Clone)]
-struct ChangedScreenCell {
-    cell: ScreenCell,
-    x: usize,
-    y: usize,
-}
-
-// impl PartialOrd for ChangedScreenCell {
-//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-//         if self.x == other.x && self.y == other.y {
-//             return Some(std::cmp::Ordering::Equal);
-//         }
-//         if self.y >= other.y && self.x > other.x {
-//             return Some(std::cmp::Ordering::Greater);
-//         }
-//         else {
-//             return Some(std::cmp::Ordering::Less);
-//         }
-//     }
-// }

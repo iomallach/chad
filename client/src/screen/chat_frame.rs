@@ -27,7 +27,7 @@ impl ChatFrame {
 
     fn _render_col(rect: &Rect, buf: &mut ScreenBuffer) {
         buf.fill_col(
-            ScreenCell::new(' ', Color::DarkGrey, Color::Reset),
+            ScreenCell::new(' ', Color::DarkGrey, Color::Reset, false),
             rect.x as usize,
             rect.y as usize,
             rect.y as usize + rect.h as usize
@@ -36,7 +36,7 @@ impl ChatFrame {
 
     fn _render_row(rect: &Rect, buf: &mut ScreenBuffer) {
         buf.fill(
-            ScreenCell::new(' ', Color::DarkGrey, Color::Reset),
+            ScreenCell::new(' ', Color::DarkGrey, Color::Reset, false),
             rect.x as usize,
             rect.y as usize,
             rect.w as usize,
