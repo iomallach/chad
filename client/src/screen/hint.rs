@@ -21,7 +21,7 @@ impl Hint {
 
     pub fn render(&self, buf: &mut ScreenBuffer) {
         let cells = self.value.chars().map(|c| {
-            ScreenCell::new(c, Color::Reset, Color::Magenta)
+            ScreenCell::new(c, Color::Reset, Color::Magenta, false)
         }).collect::<Vec<_>>();
         buf.fill_row(ScreenCell::default(), self.rect.y, Some(self.rect.x), Some(self.rect.w));
         buf.put_cells(cells, self.rect.x, self.rect.y);

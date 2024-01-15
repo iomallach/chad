@@ -66,15 +66,15 @@ impl ChatMessage {
     pub fn as_cells(&self) -> Vec<ScreenCell> {
         // TODO: duplicated code
         let mut timestamp: Vec<_> = self.timestamp.contents.chars().map(|c| {
-            ScreenCell::new(c, self.timestamp.bg_color, self.timestamp.fg_color)
+            ScreenCell::new(c, self.timestamp.bg_color, self.timestamp.fg_color, false)
         }).collect();
         timestamp.push(ScreenCell::default());
         let mut username: Vec<_> = self.username.contents.chars().map(|c| {
-            ScreenCell::new(c, self.username.bg_color, self.username.fg_color)
+            ScreenCell::new(c, self.username.bg_color, self.username.fg_color, false)
         }).collect();
         username.push(ScreenCell::default());
-        let mut msg: Vec<_> = self.msg.contents.chars().map(|c| {
-            ScreenCell::new(c, self.msg.bg_color, self.msg.fg_color)
+        let msg: Vec<_> = self.msg.contents.chars().map(|c| {
+            ScreenCell::new(c, self.msg.bg_color, self.msg.fg_color, false)
         }).collect();
         let mut message_cells: Vec<ScreenCell> = Vec::new();
 
@@ -119,31 +119,24 @@ impl ChatLog {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty()
-    }
-
-    pub fn get(&self) -> &VecDeque<ChatMessage> {
-        &self.lines
-    }
-
     pub fn render(&self, buf: &mut ScreenBuffer) {
-        // TODO: this is flawed. Probably better to do it in the put line. The below code can lead to newer messages not being printed
         let mut n_lines = 0_f32;
-        for (i, m) in self.lines.iter().enumerate() {
+        let skip_lines = self.lines.len().checked_sub(self.rect.h).unwrap_or(0);
+        for (i, m) in self.lines.iter().skip(skip_lines).enumerate() {
             let message_cells = m.as_cells();
+            let message_length = message_cells.len();
             let need_lines = message_cells.len() as f32 / self.rect.w as f32;
             n_lines += need_lines.ceil();
             if n_lines > self.rect.h as f32 {
                 break
             }
             // TODO: this doesn't take into account cases where previous message occupied multiple lines
+            buf.put_cells(message_cells, self.rect.x, self.rect.y + i);
             buf.fill_row(
                 ScreenCell::default(),
                 self.rect.y + i,
-                Some(self.rect.x),
+                Some(self.rect.x + message_length),
                 Some(self.rect.w - self.rect.x));
-            buf.put_cells(message_cells, self.rect.x, self.rect.y + i);
         }
     }
 }

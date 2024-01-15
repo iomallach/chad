@@ -127,7 +127,7 @@ impl BarComponent {
         let content_length = self.display.len() + self.value.len() + 2;
         let empty_space = self.rect.w as usize - content_length + 1;
         buf.fill_row(screen_buffer::ScreenCell::bar_cell(' ', style::Color::White), self.rect.y, Some(self.rect.x), Some(self.rect.x + self.rect.w));
-        buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2], col_cursor, self.rect.y);
+        // buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2], col_cursor, self.rect.y);
         col_cursor += empty_space / 2;
         buf.put_cells(self.display.clone(), col_cursor, self.rect.y);
         col_cursor += self.display.len();
@@ -137,7 +137,7 @@ impl BarComponent {
         col_cursor += 1;
         buf.put_cells(self.value.clone(), col_cursor, self.rect.y);
         col_cursor += self.value.len();
-        buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2 - 1], col_cursor, self.rect.y)
+        // buf.put_cells(vec![screen_buffer::ScreenCell::bar_empty_space(); empty_space/2 - 1], col_cursor, self.rect.y)
     }
 }
 

@@ -7,6 +7,8 @@
 - Fix Connection reset by peer after read_message
 - Decompose Message into Headers and embed Headers into Message. Rename message field to be body instead
 - Put chat into a frame (draw indents around using some background color) [DONE]
+- Error handling with something like anyhow
+- Draw inspiration from https://ratatui.rs/references/#-music-and-media
 
 ## Features
 - Authorization

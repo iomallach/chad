@@ -179,13 +179,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                     client.chat_log.put_line(chat_message);
                 }
                 if let Some(n_conn) = m.connections {
-                    status_bar.patch(
+                    let sbar_patch = status_bar.patch(
                         vec![
                             BarComponent::status("Online".to_owned(), screen::Rect::null()),
                             BarComponent::connected_clients(format!("{}", n_conn), screen::Rect::null()),
                             BarComponent::login(client.login_name.clone().unwrap(), screen::Rect::null())
                         ]
-                    ).render(&mut screen_buf);
+                    );
+                    sbar_patch.render(&mut screen_buf);
                 }
             },
             Err(e) => {
@@ -198,7 +199,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         hint.render(&mut screen_buf);
         client.chat_log.render(&mut screen_buf);
         client_input.render(&mut screen_buf);
-        // screen_buf.render(&mut stdout)?;
         screen_buf.render_diff(&mut stdout)?;
         screen_buf.reset_diff();
         stdout.queue(MoveTo(client_input.position() as u16, client.window.h as u16 - 1))?;
