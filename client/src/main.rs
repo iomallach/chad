@@ -17,6 +17,7 @@ mod client;
 mod chat;
 mod parser;
 mod screen;
+mod widget;
 
 
 struct TerminalState;
@@ -41,6 +42,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _terminal_state = TerminalState::enter()?;
     let mut client = Client::new();
     let mut screen_buf = screen::screen_buffer::ScreenBuffer::default(client.window.w, client.window.h);
+    let app_borders = crate::widget::Borders::new("Chad".into(), 0.45, crossterm::style::Color::Black, widget::BorderKind::ROUNDED);
+    app_borders.render(client.window.subrect(0, 0, 0, 0), &mut screen_buf);
+    screen_buf.render(&mut stdout)?;
     let mut status_bar = screen::BarBox::new(
         client.window.subrect(0, client.window.h - 2, 0, client.window.h - 1),
         vec![
@@ -55,6 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             screen::BarComponent::header("Chad".to_owned(), screen::Rect::new(0, 0, client.window.w , client.window.h ))
         ]
     );
+    let app_frame = ChatFrame::new(&screen::Rect::new(0, 0, client.window.w, client.window.h), "Chad", 0.45);
     let mut hint = Hint::new(
         "Type in /login <name> to join the fun",
         client.window.subrect(2, 2, 4, client.window.h - 1),
@@ -62,12 +67,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut client_input = ClientInput::new(
         client.window.subrect(0, client.window.h - 1, 0, client.window.h - 1),
     );
-    let chat_frame = ChatFrame::new(&screen::Rect::new(0, 0, client.window.w , client.window.h ));
+    let chat_frame = ChatFrame::new(&screen::Rect::new(3, 2, client.window.w - 3 , client.window.h - 2 ), "Chat window", 0.2);
 
-    hint.render(&mut screen_buf);
+    // hint.render(&mut screen_buf);
+    app_frame.render(&mut screen_buf);
     chat_frame.render(&mut screen_buf);
     status_bar.render(&mut screen_buf);
-    header_bar.render(&mut screen_buf);
+    // header_bar.render(&mut screen_buf);
     screen_buf.render(&mut stdout)?;
     screen_buf.reset_diff();
     stdout.queue(MoveTo(0, client.window.h as u16 - 1))?;
@@ -196,7 +202,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
         }
-        hint.render(&mut screen_buf);
+        // hint.render(&mut screen_buf);
         client.chat_log.render(&mut screen_buf);
         client_input.render(&mut screen_buf);
         screen_buf.render_diff(&mut stdout)?;

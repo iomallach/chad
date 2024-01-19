@@ -18,8 +18,8 @@ impl ScreenBuffer {
     pub fn default(w: usize, h: usize) -> Self {
         let mut slf = Self::new(w, h);
         slf.fill(ScreenCell::default(), 0, 0, w*h);
-        slf.fill(ScreenCell::bar_cell(' ', style::Color::White), 0, 0, w);
-        slf.fill(ScreenCell::bar_cell(' ', style::Color::White), 0, h - 2, w);
+        // slf.fill(ScreenCell::bar_cell(' ', style::Color::White), 0, 0, w);
+        // slf.fill(ScreenCell::bar_cell(' ', style::Color::White), 0, h - 2, w);
         slf
     }
 
@@ -118,6 +118,18 @@ impl ScreenBuffer {
         }
         stdout.queue(crossterm::cursor::Show)?;
         stdout.flush()?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for ScreenBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for row in 0..self.buf.len()/self.w {
+            for col in 0..self.w {
+                write!(f, "{}", self.buf.get(self.w * row + col).unwrap().ch)?;
+            }
+            write!(f, "\n")?;
+        }
         Ok(())
     }
 }

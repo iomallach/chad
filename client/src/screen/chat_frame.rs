@@ -7,7 +7,8 @@ pub struct ChatFrame {
     right: Rect,
     top: Rect,
     bottom: Rect,
-    header: String,
+    title: String,
+    title_alignment_prc: f32,
 }
 
 enum ColBorder {
@@ -21,19 +22,20 @@ enum RowBorder {
 }
 
 impl ChatFrame {
-    pub fn new(parent_rect: &Rect) -> Self {
+    pub fn new(parent_rect: &Rect, title: &str, title_alignment_prc: f32) -> Self {
         Self {
             left: Rect::new(parent_rect.x.into(), parent_rect.y as usize + 2, 1, parent_rect.h as usize - 6),
             right: Rect::new(parent_rect.w as usize - 1, parent_rect.y as usize + 2, 1, parent_rect.h as usize - 6),
             top: Rect::new(parent_rect.x.into(), parent_rect.y as usize + 1, parent_rect.w.into(), 1),
             bottom: Rect::new(parent_rect.x.into(), parent_rect.h as usize - 3, parent_rect.w.into(), 1),
-            header: "Chat window".into(),
+            title: title.into(),
+            title_alignment_prc,
         }
     }
 
     pub fn render(&self, buf: &mut ScreenBuffer) {
-        Self::_render_row(&self.bottom, buf, RowBorder::BOTTOM);
-        Self::_render_row(&self.top, buf, RowBorder::TOP);
+        self._render_row(&self.bottom, buf, RowBorder::BOTTOM);
+        self._render_row(&self.top, buf, RowBorder::TOP);
         Self::_render_col(&self.left, buf, ColBorder::LEFT);
         Self::_render_col(&self.right, buf, ColBorder::RIGHT);
     }
@@ -67,28 +69,29 @@ impl ChatFrame {
         );
     }
 
-    fn _render_row(rect: &Rect, buf: &mut ScreenBuffer, row_border: RowBorder) {
+    fn _render_row(&self, rect: &Rect, buf: &mut ScreenBuffer, row_border: RowBorder) {
         let y = match row_border {
             RowBorder::BOTTOM => rect.y,
             RowBorder::TOP => rect.y,
         };
         // TODO: hardcoded to quickly test, need to make it percentage based and blahblah
         if let RowBorder::TOP = row_border {
+            let align_value =(rect.w as f32 * self.title_alignment_prc).floor() as usize;
             buf.fill(
                 ScreenCell::new('─', Color::Reset, Color::White, false),
                 rect.x + 1,
                 y,
-                4,
+                align_value,
             );
-            let header_cells = "Chat window".chars().map(|c| {
+            let header_cells = self.title.chars().map(|c| {
                 ScreenCell::new(c, Color::Reset, Color::White, false)
             }).collect_vec();
             buf.put_cells(header_cells, rect.x + 1 + 5, y);
             buf.fill(
                 ScreenCell::new('─', Color::Reset, Color::White, false),
-                rect.x + 1 + 5 + 11 + 1,
+                rect.x + 1 + align_value + self.title.len() + 1,
                 y,
-                rect.w - 2 - 5 - 11,
+                rect.w - 2 - align_value - self.title.len(),
             );
         } else {
             buf.fill(
