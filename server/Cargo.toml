@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.86"
+bytes = "1.6.0"
 chrono = "0.4.31"
 mio = { version = "0.8.10", features = ["net", "os-poll"] }
 shared = { path = "../shared"}
+tokio = { version = "1.38.0", features = ["full"] }
