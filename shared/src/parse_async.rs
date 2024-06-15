@@ -30,11 +30,11 @@ impl Frame {
         }
     }
 
-    fn array() -> Self {
+    pub fn array() -> Self {
         Self::Array(Vec::new())
     }
 
-    fn push_bulk(&mut self, bulk: Frame) {
+    pub fn push_bulk(&mut self, bulk: Frame) {
         if let Self::Array(a) = self {
             a.push(bulk);
         }
@@ -97,7 +97,6 @@ fn parse_array(cur: &mut Cursor<&[u8]>) -> Result<Frame> {
 
     for _ in 0..len {
         let frame = Frame::parse(cur)?;
-        println!("Pushing frame: {:?}", frame);
         array.push_bulk(frame);
     }
 

@@ -2,7 +2,6 @@ use anyhow::Result;
 use tokio::{net::TcpListener, signal::ctrl_c};
 
 extern crate shared;
-mod message;
 mod server;
 
 #[tokio::main]
