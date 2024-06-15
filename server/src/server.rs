@@ -8,6 +8,7 @@ use bytes::Bytes;
 use shared::connection::write_frame_into;
 use shared::message::UserEnteredChat;
 use shared::message::WelcomeMessage;
+use shared::message::WhoIsInChat;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::io::BufWriter;
@@ -132,13 +133,16 @@ where
                     if let Ok(message) = broadcasted_message {
                         match message {
                             Message::ChatMessage(_) => {
-                                let mut dbg_msg = BufWriter::new(Vec::new());
-                                write_frame_into(&mut dbg_msg, message.clone().into_frame()).await?;
-                                println!("Sending: {:?}", Bytes::copy_from_slice(dbg_msg.get_ref().as_slice()));
+                                //let mut dbg_msg = BufWriter::new(Vec::new());
+                                //write_frame_into(&mut dbg_msg, message.clone().into_frame()).await?;
+                                //println!("Sending: {:?}", Bytes::copy_from_slice(dbg_msg.get_ref().as_slice()));
                                 self.connection.write_frame(message.into_frame()).await?;
                             },
                             Message::UserEnteredChat(_) => {
                                 self.connection.write_frame(message.into_frame()).await?;
+                            }
+                            Message::WhoIsInChat(_) => {
+                                self.connection.write_who_is_in_chat(message.into_frame()).await?;
                             }
                             unexpected => {
                                 eprintln!("Expected a chat message, got {:?}", unexpected)
@@ -190,6 +194,7 @@ where
                     }
                     Message::WelcomeMessage(_) => bail!("We are hijacked, aborting immediately"),
                     Message::UserEnteredChat(_) => bail!("We are hijacked, aborting immediately"),
+                    Message::WhoIsInChat(_) => bail!("We are hijacked, aborting immediately"),
                 },
                 Err(e) => {
                     eprintln!("Protocol error: {}", e);
@@ -205,7 +210,8 @@ pub struct Server {
     notify_shutdown: broadcast::Sender<()>,
     shutdown_complete: mpsc::Sender<()>,
     client_status_reciever: mpsc::Receiver<Client>,
-    clients_connected: u64,
+    clients_connected_cnt: u64,
+    clients_connected: Vec<Bytes>,
 }
 
 impl Server {
@@ -222,15 +228,23 @@ impl Server {
                     if let Some(client) = client_connected {
                         match client.status {
                             ClientStatus::Online => {
-                                self.clients_connected += 1;
+                                self.clients_connected_cnt += 1;
                                 println!("New client connected: {:?}", client);
                                 let _ = client_message_sender.send(Message::UserEnteredChat(UserEnteredChat::new(
                                     format!("{} joined the chat!", client.name).into(),
-                                    client.name.into()
+                                    client.name.clone().into()
                                 )));
+                                self.clients_connected.push(client.name.into());
+                                let _ = client_message_sender.send(
+                                    Message::WhoIsInChat(WhoIsInChat::new(
+                                        self.clients_connected.clone()
+                                    ))
+                                );
+                                println!("Current clients connected: {:?}", self.clients_connected);
                             }
                             ClientStatus::Offline => {
-                                self.clients_connected -= 1;
+                                // TODO: send UserLeftChatMessages (not imlemented yet)
+                                self.clients_connected_cnt -= 1;
                                 println!("Client {:?} disconnected", client);
                             }
                         }
@@ -272,15 +286,16 @@ pub async fn run(listener: TcpListener, shutdown_sig: impl Future) -> Result<()>
     let (notify_shutdown, _) = broadcast::channel(1);
     // TODO: explore client status channel capacity
     let (client_status_sender, client_status_reciever) = mpsc::channel(1);
-    let (client_message_sender, _) = broadcast::channel(1);
+    let (client_message_sender, _) = broadcast::channel(20);
     let (shutdown_complete, mut shutdown_complete_reciever) = mpsc::channel(1);
 
     let mut server = Server {
         tcp_listener: listener,
         notify_shutdown: notify_shutdown.clone(),
         shutdown_complete,
-        clients_connected: 0,
+        clients_connected_cnt: 0,
         client_status_reciever,
+        clients_connected: Vec::new(),
     };
 
     tokio::select! {

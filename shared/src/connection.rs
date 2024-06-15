@@ -56,6 +56,32 @@ where
     pub async fn write_frame(&mut self, frame: Frame) -> Result<()> {
         write_frame_into(&mut self.writer, frame).await
     }
+
+    // TODO: figure out how to write a recursive structure as async doesn't support recursion
+    pub async fn write_who_is_in_chat(&mut self, frame: Frame) -> Result<()> {
+        match frame {
+            Frame::Array(arr) => {
+                self.writer
+                    .write_all(format!("*{}\r\n", arr.len()).as_bytes())
+                    .await?;
+                let mut frame_iter = arr.into_iter();
+                if let Some(Frame::Bulk(b)) = frame_iter.next() {
+                    self.writer
+                        .write_all(format!("${}\r\n", b.len()).as_bytes())
+                        .await?;
+                    self.writer.write_all(&b).await?;
+                    self.writer.write_all(b"\r\n").await?;
+                }
+                write_frame_into(
+                    &mut self.writer,
+                    frame_iter.next().expect("Broken who is in chat frame"),
+                )
+                .await?;
+                Ok(())
+            }
+            Frame::Bulk(_) => bail!("Expected array frame, got bulk"),
+        }
+    }
 }
 
 pub async fn write_frame_into<W: AsyncWrite + Unpin>(dst: &mut W, frame: Frame) -> Result<()> {

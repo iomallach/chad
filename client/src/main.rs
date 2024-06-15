@@ -91,7 +91,12 @@ async fn main() -> Result<()> {
                                 "System".to_string(),
                                 " ".to_string()
                             ));
-                            chatters.push(format!("{}{}", " ", String::from_utf8(m.name.to_vec())?));
+                        }
+                        Message::WhoIsInChat(m) => {
+                            chatters = m.chatters.iter().map(|c| {
+                                let stringified_bytes = String::from_utf8(c.to_vec()).expect("Failed decoding bytes");
+                                format!(" {}", stringified_bytes)
+                            }).collect();
                         }
                         _ => panic!("We are hijacked, terminating!"),
                     }

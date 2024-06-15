@@ -11,6 +11,7 @@ pub enum Message {
     ChatMessage(ChatMessage),
     WelcomeMessage(WelcomeMessage),
     UserEnteredChat(UserEnteredChat),
+    WhoIsInChat(WhoIsInChat),
 }
 
 impl Message {
@@ -26,6 +27,7 @@ impl Message {
             b"chat_message" => Ok(Self::ChatMessage(ChatMessage::parse_new_message(parser)?)),
             b"welcome_message" => Ok(Self::WelcomeMessage(WelcomeMessage::parse(parser)?)),
             b"user_entered_chat" => Ok(Self::UserEnteredChat(UserEnteredChat::parse(parser)?)),
+            b"who_is_in_chat" => Ok(Self::WhoIsInChat(WhoIsInChat::parse(parser)?)),
             unknown => bail!("Unknown message kind: {:?}", unknown),
         }
     }
@@ -66,7 +68,36 @@ impl Message {
                 frame.push_bulk(Frame::Bulk(msg.msg));
                 frame
             }
+            Self::WhoIsInChat(msg) => {
+                let mut frame = Frame::array();
+                frame.push_bulk(Frame::Bulk(Bytes::from_static(b"who_is_in_chat")));
+
+                let mut chatters_array = Frame::array();
+                msg.chatters.iter().for_each(|el| {
+                    chatters_array.push_bulk(Frame::Bulk(el.clone()));
+                });
+                frame.push_bulk(chatters_array);
+                println!("View as frame: {:?}", frame);
+                frame
+            }
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WhoIsInChat {
+    pub chatters: Vec<Bytes>,
+}
+
+impl WhoIsInChat {
+    fn parse(mut parser: Parser) -> Result<Self> {
+        Ok(Self {
+            chatters: parser.next_array()?,
+        })
+    }
+
+    pub fn new(chatters: Vec<Bytes>) -> Self {
+        Self { chatters }
     }
 }
 
@@ -193,6 +224,20 @@ impl Parser {
             Frame::Bulk(s) => Ok(s),
             Frame::Array(_) => bail!("Expected bulk string, found array"),
         }
+    }
+
+    fn next_array(&mut self) -> Result<Vec<Bytes>> {
+        if let Frame::Array(a) = self.next()? {
+            let mut array: Vec<Bytes> = Vec::new();
+            let length = a.len();
+            let mut inner_parser = Self::new(Frame::Array(a))?;
+
+            for _ in 0..length {
+                array.push(inner_parser.next_bytes()?);
+            }
+            return Ok(array);
+        }
+        bail!("Expected array, got something else")
     }
 
     fn next_i64(&mut self) -> Result<i64> {
