@@ -13,7 +13,6 @@ use shared::connection::Connection;
 use shared::message::Message;
 use shared::message::{ChatMessage, Login};
 use std::io::stdout;
-use std::time::SystemTime;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 
