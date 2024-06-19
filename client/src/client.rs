@@ -6,6 +6,7 @@ use std::{error::Error, net::SocketAddr};
 use tokio::net::TcpStream;
 
 pub struct ClientInput {
+    // TODO: make private when the flux move is over
     pub inner: Vec<char>,
     cursor: usize,
 }
@@ -62,6 +63,10 @@ impl ClientInput {
 
     pub fn position(&self) -> usize {
         self.cursor
+    }
+
+    pub fn get_ref(&self) -> &[char] {
+        &self.inner
     }
 }
 
