@@ -1,5 +1,8 @@
 use crate::{
-    state::{action::Action, state::State},
+    state::{
+        action::Action,
+        state::{ConnectionStatus, State},
+    },
     ui::page::widget::Widget,
 };
 use crossterm::event::KeyEvent;
@@ -46,6 +49,10 @@ impl Dispatcher {
     }
 
     pub(crate) fn update(&mut self, state: State) {
+        self.active_page = match state.connection_status {
+            ConnectionStatus::Offline => ActivePage::Login,
+            ConnectionStatus::Online => ActivePage::Chat,
+        };
         self.get_active_page_mut().update(state);
     }
 

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::state::state::ConnectionStatus;
 use crate::state::{action::Action, state::State};
 use anyhow::Result;
 use bytes::Bytes;
@@ -67,6 +68,7 @@ impl StateManager {
                                 .expect("Connection suddenly closed shortly after opening")
                                 .write_frame(login_message.into_frame()).await?;
                             state.login_name = Some(name);
+                            state.connection_status = ConnectionStatus::Online
                         },
                         Action::SendMessage { .. } => unreachable!("Broken state: requesting to send a message when the client if offline"),
                         Action::Quit => break,

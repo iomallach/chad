@@ -70,6 +70,18 @@ impl Default for ChatLog {
     }
 }
 
+#[derive(Clone)]
+pub(crate) enum ConnectionStatus {
+    Offline,
+    Online,
+}
+
+impl Default for ConnectionStatus {
+    fn default() -> Self {
+        Self::Offline
+    }
+}
+
 #[derive(Default, Clone)]
 pub(crate) struct State {
     pub(crate) login_name: Option<String>,
@@ -77,6 +89,7 @@ pub(crate) struct State {
     pub(crate) chat_messages: ChatLog,
     // TODO: Same as above, ideally {name, icon, ?time_joined}
     pub(crate) online_users: HashSet<String>,
+    pub(crate) connection_status: ConnectionStatus,
 }
 
 // TODO: perhaps it makes sense to return a Result from here

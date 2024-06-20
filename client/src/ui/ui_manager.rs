@@ -44,13 +44,15 @@ impl UiManager {
         let mut ticker = interval(Duration::from_millis(250));
         let mut crossterm_events = EventStream::new();
 
-        select! {
-            _ = ticker.tick() => {},
-            Some(Ok(Event::Key(event))) = crossterm_events.next().fuse() => dispatcher.handle_key_event(event),
-            Some(state) = state_rx.recv() => dispatcher.update(state),
-        }
+        loop {
+            select! {
+                _ = ticker.tick() => {},
+                Some(Ok(Event::Key(event))) = crossterm_events.next().fuse() => dispatcher.handle_key_event(event),
+                Some(state) = state_rx.recv() => dispatcher.update(state),
+            }
 
-        terminal.draw(|frame| dispatcher.render(frame))?;
+            terminal.draw(|frame| dispatcher.render(frame))?;
+        }
         exit_terminal_app()?;
         Ok(())
     }
