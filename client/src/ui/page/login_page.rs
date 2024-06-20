@@ -54,7 +54,7 @@ impl Widget for LoginPage {
     fn update(&mut self, _state: crate::state::state::State) {}
 
     fn render(&self, frame: &mut ratatui::prelude::Frame) {
-        let title = Title::from("Type your name and jump right into it".bold());
+        let title = Title::from("Who are you?".bold());
         let instructions = Title::from(Line::from(vec![
             "Enter ".into(),
             "your".green().bold(),
@@ -74,17 +74,17 @@ impl Widget for LoginPage {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(25),
-                Constraint::Fill(1),
-                Constraint::Percentage(25),
+                Constraint::Percentage(50),
+                Constraint::Min(3),
+                Constraint::Percentage(50),
             ])
             .split(frame.size());
         let center_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(25),
-                Constraint::Fill(1),
-                Constraint::Percentage(25),
+                Constraint::Percentage(50),
+                Constraint::Min(40),
+                Constraint::Percentage(50),
             ])
             .split(chunks[1]);
 
