@@ -5,7 +5,6 @@ use tokio::sync::oneshot::channel;
 
 mod client;
 mod state;
-mod tui;
 mod ui;
 
 use crate::state::state_manager::StateManager;
