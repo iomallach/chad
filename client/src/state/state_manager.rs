@@ -11,6 +11,7 @@ use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    sync::oneshot::Sender,
     time::interval,
 };
 
@@ -23,7 +24,11 @@ impl StateManager {
         Self { state_tx }
     }
 
-    pub async fn state_loop(&mut self, mut action_rx: UnboundedReceiver<Action>) -> Result<()> {
+    pub async fn state_loop(
+        &mut self,
+        mut action_rx: UnboundedReceiver<Action>,
+        termination_tx: Sender<()>,
+    ) -> Result<()> {
         let mut connection: Option<Connection<OwnedWriteHalf, OwnedReadHalf>> = None;
         let mut state = State::default();
         let mut ticker = interval(Duration::from_millis(500));
@@ -49,7 +54,10 @@ impl StateManager {
                                 ).into_frame()
                             ).await?;
                         },
-                        Action::Quit => break,
+                        Action::Quit => {
+                            let _ = termination_tx.send(());
+                            break;
+                        },
                     },
                     _ = ticker.tick() => {},
                 }

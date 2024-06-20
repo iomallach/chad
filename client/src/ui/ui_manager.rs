@@ -21,6 +21,7 @@ use ratatui::Terminal;
 use tokio::select;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot::Receiver;
 use tokio::time::interval;
 
 use super::dispatch::Dispatcher;
@@ -34,7 +35,11 @@ impl UiManager {
         Self { action_tx }
     }
 
-    pub(crate) async fn ui_loop(&mut self, mut state_rx: UnboundedReceiver<State>) -> Result<()> {
+    pub(crate) async fn ui_loop(
+        &mut self,
+        mut state_rx: UnboundedReceiver<State>,
+        mut termination_rx: Receiver<()>,
+    ) -> Result<()> {
         let mut terminal = enter_terminal_app()?;
         let state = state_rx
             .recv()
@@ -49,6 +54,7 @@ impl UiManager {
                 _ = ticker.tick() => {},
                 Some(Ok(Event::Key(event))) = crossterm_events.next().fuse() => dispatcher.handle_key_event(event),
                 Some(state) = state_rx.recv() => dispatcher.update(state),
+                Err(_) = &mut termination_rx => break,
             }
 
             terminal.draw(|frame| dispatcher.render(frame))?;
