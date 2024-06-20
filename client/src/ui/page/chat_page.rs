@@ -16,6 +16,8 @@ use crate::{
 
 use super::widget::Widget;
 
+const USER_ICON: &str = "";
+
 struct ChatPageState {
     login_name: Option<String>,
     chat_messages: ChatLog,
@@ -120,7 +122,7 @@ impl Widget for ChatPage {
         });
 
         let chatters_lines = self.page_state.online_users.iter().map(|l| {
-            let item = Line::from(Span::raw(l));
+            let item = Line::from(Span::raw(format!("{} {}", USER_ICON, l)));
             ListItem::new(item)
         });
 
