@@ -53,6 +53,7 @@ impl StateManager {
                                     )
                                 ).into_frame()
                             ).await?;
+                            state.messages_sent += 1;
                         },
                         Action::Quit => {
                             let _ = termination_tx.send(());

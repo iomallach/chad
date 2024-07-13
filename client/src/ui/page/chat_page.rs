@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
-    prelude::Stylize,
+    style::Stylize,
     symbols,
     text::{Line, Span},
     widgets::{block::Title, Block, Borders, List, ListItem, Paragraph},
@@ -20,6 +20,7 @@ const USER_ICON: &str = "";
 
 struct ChatPageState {
     login_name: Option<String>,
+    messages_sent: u64,
     chat_messages: ChatLog,
     online_users: HashSet<String>,
 }
@@ -28,6 +29,7 @@ impl From<State> for ChatPageState {
     fn from(value: State) -> Self {
         Self {
             login_name: value.login_name,
+            messages_sent: value.messages_sent,
             chat_messages: value.chat_messages,
             online_users: value.online_users,
         }
@@ -85,15 +87,15 @@ impl Widget for ChatPage {
     fn render(&self, frame: &mut ratatui::prelude::Frame) {
         let [left, right] = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
+            .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
             .areas(frame.size());
         let [chat_area, input_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(100), Constraint::Min(3)])
             .areas(left);
-        let [chatters_area, diagnostics_area] = Layout::default()
+        let [chatters_area, user_info_area] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+            .constraints([Constraint::Percentage(100), Constraint::Min(5)])
             .areas(right);
 
         let chat_block = Block::default()
@@ -110,21 +112,37 @@ impl Widget for ChatPage {
             .title(Title::from("Chatters".bold()).alignment(Alignment::Left))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED);
-        let diagnostics_block = Block::default()
-            .title(Title::from("Diagnostics".bold()).alignment(Alignment::Left))
+        let user_info_block = Block::default()
+            .title(Title::from("User info".bold()).alignment(Alignment::Left))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED);
 
-        // TODO: implemet display on chat message instead?
-        let chat_lines = self.page_state.chat_messages.get_lines().iter().map(|l| {
-            let msg = Line::from(Span::raw(format!("{}", l)));
-            ListItem::new(msg)
-        });
+        let chat_lines = self
+            .page_state
+            .chat_messages
+            .get_messages()
+            .iter()
+            .map(|l| {
+                let msg = Line::from(Span::raw(format!("{}", l)));
+                ListItem::new(msg)
+            });
 
         let chatters_lines = self.page_state.online_users.iter().map(|l| {
-            let item = Line::from(Span::raw(format!("{} {}", USER_ICON, l)));
+            let chatter = if *l == *self.page_state.login_name.as_ref().unwrap() {
+                "You".green()
+            } else {
+                l.clone().white()
+            };
+            let item = Line::from(vec![Span::from(format!("{} ", USER_ICON)), chatter]);
             ListItem::new(item)
         });
+
+        let user_info_lines = {
+            let user_name_line =
+                Line::from(self.page_state.login_name.as_ref().unwrap().to_string());
+            let messages_sent = Line::from(format!("Sent: {}", self.page_state.messages_sent));
+            vec![ListItem::new(user_name_line), ListItem::new(messages_sent)]
+        };
 
         frame.render_widget(List::new(chat_lines).block(chat_block), chat_area);
         frame.render_widget(
@@ -135,7 +153,10 @@ impl Widget for ChatPage {
             List::new(chatters_lines).block(chatters_block),
             chatters_area,
         );
-        frame.render_widget(diagnostics_block, diagnostics_area);
+        frame.render_widget(
+            List::new(user_info_lines).block(user_info_block),
+            user_info_area,
+        );
 
         frame.set_cursor(
             input_area.x + 1 + self.input.get_ref().len() as u16,

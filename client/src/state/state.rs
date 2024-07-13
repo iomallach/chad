@@ -1,3 +1,4 @@
+use ratatui::layout::Rect;
 use shared::message::Message;
 use std::collections::{HashSet, VecDeque};
 
@@ -35,36 +36,57 @@ impl std::fmt::Display for ChatMessage {
 
 #[derive(Clone)]
 pub(crate) struct ChatLog {
-    lines: VecDeque<ChatMessage>,
+    messages: VecDeque<ChatMessage>,
     max_messages: usize,
 }
 
 impl ChatLog {
     pub(crate) fn new(max_messages: usize) -> Self {
         Self {
-            lines: VecDeque::new(),
+            messages: VecDeque::new(),
             max_messages,
         }
     }
 
-    pub(crate) fn put_line(&mut self, line: ChatMessage) {
-        if self.lines.len() + 1 > self.max_messages {
-            self.lines.pop_front();
-            self.lines.push_back(line)
+    pub(crate) fn put_message(&mut self, line: ChatMessage) {
+        if self.messages.len() + 1 > self.max_messages {
+            self.messages.pop_front();
+            self.messages.push_back(line)
         } else {
-            self.lines.push_back(line);
+            self.messages.push_back(line);
         }
     }
 
-    pub(crate) fn get_lines(&self) -> &VecDeque<ChatMessage> {
-        &self.lines
+    pub(crate) fn get_messages(&self) -> &VecDeque<ChatMessage> {
+        &self.messages
     }
+
+    pub(crate) fn get_fitting_messages(&self, area: &Rect) -> VecDeque<ChatMessage> {
+        let mut fitting_messages: VecDeque<ChatMessage> = VecDeque::new();
+        let mut lines_filled: u16 = 0;
+
+        for m in self.messages.iter().rev() {
+            // TODO: probably better to allocate once
+            let lines_needed = divide_ceiled(m.msg.len() as f32, area.width as f32);
+            if (lines_needed + lines_filled) > area.height {
+                break;
+            } else {
+                lines_filled += lines_needed;
+                fitting_messages.push_front(m.clone());
+            }
+        }
+        fitting_messages
+    }
+}
+
+fn divide_ceiled(nom: f32, denom: f32) -> u16 {
+    (nom / denom).ceil() as u16
 }
 
 impl Default for ChatLog {
     fn default() -> Self {
         Self {
-            lines: VecDeque::new(),
+            messages: VecDeque::new(),
             max_messages: 50,
         }
     }
@@ -90,6 +112,7 @@ pub(crate) struct State {
     // TODO: Same as above, ideally {name, icon, ?time_joined}
     pub(crate) online_users: HashSet<String>,
     pub(crate) connection_status: ConnectionStatus,
+    pub(crate) messages_sent: u64,
 }
 
 // TODO: perhaps it makes sense to return a Result from here
@@ -106,7 +129,7 @@ impl State {
                     String::from_utf8(m.msg.to_vec()).expect("Couldn't decode the message in utf8"),
                     USER_ICON.to_string(),
                 );
-                self.chat_messages.put_line(chat_message);
+                self.chat_messages.put_message(chat_message);
             }
             Message::WelcomeMessage(m) => {
                 let msg =
@@ -115,7 +138,7 @@ impl State {
                     .expect("Couldn't decode the message in utf8");
                 let chat_message =
                     ChatMessage::new("System".to_string(), sent_at, msg, SYSTEM_ICON.to_string());
-                self.chat_messages.put_line(chat_message);
+                self.chat_messages.put_message(chat_message);
             }
             Message::UserEnteredChat(m) => {
                 let msg =
@@ -126,7 +149,7 @@ impl State {
                     msg,
                     SYSTEM_ICON.to_string(),
                 );
-                self.chat_messages.put_line(chat_message);
+                self.chat_messages.put_message(chat_message);
             }
             Message::WhoIsInChat(m) => {
                 self.online_users = m
