@@ -30,11 +30,11 @@ impl Frame {
         }
     }
 
-    fn array() -> Self {
+    pub fn array() -> Self {
         Self::Array(Vec::new())
     }
 
-    fn push_bulk(&mut self, bulk: Frame) {
+    pub fn push_bulk(&mut self, bulk: Frame) {
         if let Self::Array(a) = self {
             a.push(bulk);
         }
@@ -97,7 +97,6 @@ fn parse_array(cur: &mut Cursor<&[u8]>) -> Result<Frame> {
 
     for _ in 0..len {
         let frame = Frame::parse(cur)?;
-        println!("Pushing frame: {:?}", frame);
         array.push_bulk(frame);
     }
 
@@ -141,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_bulk_string() {
-        let mut cur = Cursor::new("5\r\nhello\r\n".as_bytes());
+        let mut cur = Cursor::new("$5\r\nhello\r\n".as_bytes());
         let res = parse_bulk_str(&mut cur).expect("Failed parsing bulk string");
 
         assert_eq!(res, Frame::Bulk(Bytes::from_static(b"hello")))
@@ -169,5 +168,21 @@ mod tests {
         let res = parse_line(&mut cur).expect("Failed parsing a line");
 
         assert_eq!(res, b"a sort of line")
+    }
+
+    #[test]
+    fn test_parse_nested_array() {
+        let mut cur =
+            Cursor::new("*2\r\n$4\r\ntest\r\n*2\r\n$3\r\npak\r\n$5\r\npasik\r\n".as_bytes());
+        let res = Frame::parse(&mut cur).expect("Failed parsing nested array");
+
+        let expected = Frame::Array(vec![
+            Frame::Bulk(Bytes::from_static(b"test")),
+            Frame::Array(vec![
+                Frame::Bulk(Bytes::from_static(b"pak")),
+                Frame::Bulk(Bytes::from_static(b"pasik")),
+            ]),
+        ]);
+        assert_eq!(res, expected)
     }
 }

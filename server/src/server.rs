@@ -1,27 +1,24 @@
 use std::future::Future;
-use std::io::Cursor;
 use std::time::SystemTime;
 
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
-use bytes::Buf;
-use bytes::BytesMut;
+use bytes::Bytes;
+use shared::connection::write_frame_into;
+use shared::message::UserEnteredChat;
+use shared::message::WelcomeMessage;
+use shared::message::WhoIsInChat;
 use tokio::io::AsyncRead;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWrite;
-use tokio::io::AsyncWriteExt;
-use tokio::io::BufReader;
 use tokio::io::BufWriter;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 
 extern crate shared;
-use shared::parse_async::Frame;
-use shared::parse_async::ParseError;
-
-use crate::message::Message;
+use shared::connection::Connection;
+use shared::message::Message;
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -98,6 +95,7 @@ where
     client_status_sender: mpsc::Sender<Client>,
     client_message_sender: broadcast::Sender<Message>,
     client_message_receiver: broadcast::Receiver<Message>,
+    client: Option<Client>,
 }
 
 impl<W, R> ConnectionHandler<W, R>
@@ -118,6 +116,7 @@ where
             client_status_sender,
             client_message_sender,
             client_message_receiver,
+            client: None,
         }
     }
 
@@ -133,17 +132,18 @@ where
                     println!("Receiving broadcasted_message");
                     if let Ok(message) = broadcasted_message {
                         match message {
-                            Message::ChatMessage(msg) => {
-                                self.connection.writer.write_all(b"*3\r\n$12\r\nchat_message\r\n$").await?;
-                                self.connection.writer.write_all(format!("{}", msg.name.len()).as_bytes()).await?;
-                                self.connection.writer.write_all(b"\r\n").await?;
-                                self.connection.writer.write_all(&msg.name[..]).await?;
-                                self.connection.writer.write_all(b"\r\n$").await?;
-                                self.connection.writer.write_all(format!("{}", msg.msg.len()).as_bytes()).await?;
-                                self.connection.writer.write_all(&msg.msg[..]).await?;
-                                self.connection.writer.write_all(b"\r\n").await?;
-                                self.connection.writer.flush().await?;
+                            Message::ChatMessage(_) => {
+                                //let mut dbg_msg = BufWriter::new(Vec::new());
+                                //write_frame_into(&mut dbg_msg, message.clone().into_frame()).await?;
+                                //println!("Sending: {:?}", Bytes::copy_from_slice(dbg_msg.get_ref().as_slice()));
+                                self.connection.write_frame(message.into_frame()).await?;
                             },
+                            Message::UserEnteredChat(_) => {
+                                self.connection.write_frame(message.into_frame()).await?;
+                            }
+                            Message::WhoIsInChat(_) => {
+                                self.connection.write_who_is_in_chat(message.into_frame()).await?;
+                            }
                             unexpected => {
                                 eprintln!("Expected a chat message, got {:?}", unexpected)
                             },
@@ -162,7 +162,7 @@ where
                         let now_timestamp = SystemTime::now()
                             .duration_since(SystemTime::UNIX_EPOCH)?
                             .as_millis();
-                        self.connection.client = Some(Client::new(
+                        self.client = Some(Client::new(
                             String::from_utf8(msg.name.to_vec())?,
                             chrono::NaiveDateTime::from_timestamp_millis(now_timestamp.try_into()?)
                                 .ok_or(anyhow!("The clock might've gone backwards"))?,
@@ -170,19 +170,17 @@ where
                         // NOTE: Safety: the client is initialized just before unwrapping, hence
                         // it's safe
                         self.client_status_sender
-                            .send(self.connection.client.as_ref().unwrap().clone())
+                            .send(self.client.as_ref().unwrap().clone())
                             .await?;
-                        // TODO: move the following into Frame::write() (doesn't exist yet)
-                        self.connection
-                            .writer
-                            .write_all(b"*2\r\nsystem_message\r\n$8\r\nWelcome!\r\n")
-                            .await?;
-                        self.connection.writer.flush().await?;
+
+                        let message =
+                            Message::WelcomeMessage(WelcomeMessage::new("Welcome to chad!".into()))
+                                .into_frame();
+                        self.connection.write_frame(message).await?;
                     }
                     Message::Logout(_) => {
                         // NOTE: Safety: unwrap below should never panic? LUL
-                        let logged_out_client =
-                            self.connection.client.take().unwrap().mark_offline();
+                        let logged_out_client = self.client.take().unwrap().mark_offline();
                         self.client_status_sender.send(logged_out_client).await?;
                         return Ok(());
                     }
@@ -192,13 +190,11 @@ where
                             .map_err(|_| anyhow!("All receivers dropped the handle"))?;
                         // TODO: proooobably not safe to unwrap here, should be if-let with
                         // handling instead
-                        self.connection
-                            .client
-                            .as_mut()
-                            .unwrap()
-                            .increment_messages();
+                        self.client.as_mut().unwrap().increment_messages();
                     }
-                    Message::SystemMessage(_) => bail!("We are hijacked, aborting immediately"),
+                    Message::WelcomeMessage(_) => bail!("We are hijacked, aborting immediately"),
+                    Message::UserEnteredChat(_) => bail!("We are hijacked, aborting immediately"),
+                    Message::WhoIsInChat(_) => bail!("We are hijacked, aborting immediately"),
                 },
                 Err(e) => {
                     eprintln!("Protocol error: {}", e);
@@ -209,59 +205,13 @@ where
     }
 }
 
-struct Connection<W, R>
-where
-    W: AsyncWrite + Unpin,
-    R: AsyncRead + Unpin,
-{
-    reader: BufReader<R>,
-    writer: BufWriter<W>,
-    buffer: BytesMut,
-    client: Option<Client>,
-}
-
-impl<W, R> Connection<W, R>
-where
-    W: AsyncWrite + Unpin,
-    R: AsyncRead + Unpin,
-{
-    pub fn new(reader: R, writer: W) -> Self {
-        Self {
-            reader: BufReader::new(reader),
-            writer: BufWriter::new(writer),
-            buffer: BytesMut::with_capacity(1024 * 512),
-            client: None,
-        }
-    }
-
-    async fn read_frame(&mut self) -> Result<Frame> {
-        loop {
-            println!("Buffer state: {:?}", self.buffer);
-            let mut cursor = Cursor::new(&self.buffer[..]);
-            match Frame::parse(&mut cursor) {
-                Ok(frame) => {
-                    self.buffer.advance(cursor.position() as usize);
-                    return Ok(frame);
-                }
-                Err(e) => match e.downcast_ref::<ParseError>() {
-                    Some(ParseError::IncompleteFrame) => {
-                        if 0 == self.reader.read_buf(&mut self.buffer).await? {
-                            anyhow::bail!("connection reset by peer")
-                        }
-                    }
-                    _ => return Err(e),
-                },
-            }
-        }
-    }
-}
-
 pub struct Server {
     tcp_listener: TcpListener,
     notify_shutdown: broadcast::Sender<()>,
     shutdown_complete: mpsc::Sender<()>,
     client_status_reciever: mpsc::Receiver<Client>,
-    clients_connected: u64,
+    clients_connected_cnt: u64,
+    clients_connected: Vec<Bytes>,
 }
 
 impl Server {
@@ -276,8 +226,28 @@ impl Server {
                 conn = self.tcp_listener.accept() => conn?,
                 client_connected = self.client_status_reciever.recv() => {
                     if let Some(client) = client_connected {
-                        self.clients_connected += 1;
-                        println!("New client connected: {:?}", client);
+                        match client.status {
+                            ClientStatus::Online => {
+                                self.clients_connected_cnt += 1;
+                                println!("New client connected: {:?}", client);
+                                let _ = client_message_sender.send(Message::UserEnteredChat(UserEnteredChat::new(
+                                    format!("{} joined the chat!", client.name).into(),
+                                    client.name.clone().into()
+                                )));
+                                self.clients_connected.push(client.name.into());
+                                let _ = client_message_sender.send(
+                                    Message::WhoIsInChat(WhoIsInChat::new(
+                                        self.clients_connected.clone()
+                                    ))
+                                );
+                                println!("Current clients connected: {:?}", self.clients_connected);
+                            }
+                            ClientStatus::Offline => {
+                                // TODO: send UserLeftChatMessages (not imlemented yet)
+                                self.clients_connected_cnt -= 1;
+                                println!("Client {:?} disconnected", client);
+                            }
+                        }
                     } else {
                         eprintln!("All receivers dropped the send handle");
                     }
@@ -300,7 +270,7 @@ impl Server {
                     eprintln!("An error occured: {}", e);
                     let _ = handler
                         .client_status_sender
-                        .send(handler.connection.client.take().unwrap().mark_offline())
+                        .send(handler.client.take().unwrap().mark_offline())
                         .await
                         .map_err(|e| {
                             eprintln!("Couldn't let the server know a client got disconnected");
@@ -316,15 +286,16 @@ pub async fn run(listener: TcpListener, shutdown_sig: impl Future) -> Result<()>
     let (notify_shutdown, _) = broadcast::channel(1);
     // TODO: explore client status channel capacity
     let (client_status_sender, client_status_reciever) = mpsc::channel(1);
-    let (client_message_sender, _) = broadcast::channel(1);
+    let (client_message_sender, _) = broadcast::channel(20);
     let (shutdown_complete, mut shutdown_complete_reciever) = mpsc::channel(1);
 
     let mut server = Server {
         tcp_listener: listener,
         notify_shutdown: notify_shutdown.clone(),
         shutdown_complete,
-        clients_connected: 0,
+        clients_connected_cnt: 0,
         client_status_reciever,
+        clients_connected: Vec::new(),
     };
 
     tokio::select! {
