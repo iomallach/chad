@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Margin},
     style::Stylize,
     symbols,
     text::{Line, Span},
@@ -11,7 +11,7 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    client::ClientInput, state::action::Action, state::state::ChatLog, state::state::State,
+    client::ClientInput, state::action::Action, state::chat::ChatLog, state::state::State,
 };
 
 use super::widget::Widget;
@@ -120,8 +120,8 @@ impl Widget for ChatPage {
         let chat_lines = self
             .page_state
             .chat_messages
-            .get_messages()
-            .iter()
+            .get_fitting_messages(&chat_area.inner(&Margin::new(0, 1)))
+            .into_iter()
             .map(|l| {
                 let msg = Line::from(Span::raw(format!("{}", l)));
                 ListItem::new(msg)
