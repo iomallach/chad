@@ -1,7 +1,6 @@
 extern crate shared;
 use anyhow::Result;
-use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::oneshot::channel;
+use tokio::sync::{mpsc, oneshot};
 
 mod client;
 mod state;
@@ -12,9 +11,9 @@ use crate::ui::ui_manager::UiManager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (state_tx, state_rx) = unbounded_channel();
-    let (action_tx, action_rx) = unbounded_channel();
-    let (termination_tx, termination_rx) = channel();
+    let (state_tx, state_rx) = mpsc::unbounded_channel();
+    let (action_tx, action_rx) = mpsc::unbounded_channel();
+    let (termination_tx, termination_rx) = oneshot::channel();
     let mut state_manager = StateManager::new(state_tx);
     let mut ui_manager = UiManager::new(action_tx);
 
