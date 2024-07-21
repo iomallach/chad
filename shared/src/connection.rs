@@ -4,7 +4,7 @@ use anyhow::bail;
 use anyhow::Result;
 use bytes::Buf;
 use bytes::BytesMut;
-use std::io::Cursor;
+use std::io::{self, Cursor};
 use tokio::io::AsyncWriteExt;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, BufReader, BufWriter};
 
@@ -44,7 +44,10 @@ where
                 Err(e) => match e.downcast_ref::<ParseError>() {
                     Some(ParseError::IncompleteFrame) => {
                         if 0 == self.reader.read_buf(&mut self.buffer).await? {
-                            anyhow::bail!("connection reset by peer")
+                            anyhow::bail!(io::Error::new(
+                                io::ErrorKind::ConnectionReset,
+                                "connection reset by peer"
+                            ))
                         }
                     }
                     _ => return Err(e),

@@ -38,8 +38,19 @@ impl StateManager {
             if let Some(ref mut conn) = connection {
                 select! {
                     maybe_frame = conn.read_frame() => {
-                        let server_message = Message::from_frame(maybe_frame?)?;
-                        state.handle_server_message(server_message);
+                        match maybe_frame {
+                            Ok(frame) => {
+                                let server_message = Message::from_frame(frame)?;
+                                state.handle_server_message(server_message);
+                            },
+                            Err(e) => {
+                                let maybe_io_error = e.downcast_ref::<std::io::Error>();
+                                if maybe_io_error.is_some() && maybe_io_error.unwrap().kind() == std::io::ErrorKind::ConnectionReset {
+                                    connection = None;
+                                    state.connection_status = ConnectionStatus::Offline;
+                                }
+                            }
+                        }
                     },
                     Some(ui_event) = action_rx.recv() => match ui_event {
                         Action::ConnectAndLogin { .. } => unreachable!("Impossible action when the connection is already established"),
