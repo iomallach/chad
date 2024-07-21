@@ -61,6 +61,17 @@ impl State {
                 );
                 self.chat_messages.put_message(chat_message);
             }
+            Message::UserLeftChat(m) => {
+                let msg =
+                    String::from_utf8(m.msg.to_vec()).expect("Couldn't decode the message in utf8");
+                let chat_message = ChatMessage::new(
+                    "System".to_string(),
+                    "".to_string(),
+                    msg,
+                    SYSTEM_ICON.to_string(),
+                );
+                self.chat_messages.put_message(chat_message);
+            }
             Message::WhoIsInChat(m) => {
                 self.online_users = m
                     .chatters

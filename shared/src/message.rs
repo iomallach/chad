@@ -11,6 +11,7 @@ pub enum Message {
     ChatMessage(ChatMessage),
     WelcomeMessage(WelcomeMessage),
     UserEnteredChat(UserEnteredChat),
+    UserLeftChat(UserLeftChat),
     WhoIsInChat(WhoIsInChat),
 }
 
@@ -27,6 +28,7 @@ impl Message {
             b"chat_message" => Ok(Self::ChatMessage(ChatMessage::parse_new_message(parser)?)),
             b"welcome_message" => Ok(Self::WelcomeMessage(WelcomeMessage::parse(parser)?)),
             b"user_entered_chat" => Ok(Self::UserEnteredChat(UserEnteredChat::parse(parser)?)),
+            b"user_left_chat" => Ok(Self::UserLeftChat(UserLeftChat::parse(parser)?)),
             b"who_is_in_chat" => Ok(Self::WhoIsInChat(WhoIsInChat::parse(parser)?)),
             unknown => bail!("Unknown message kind: {:?}", unknown),
         }
@@ -64,6 +66,13 @@ impl Message {
             Self::UserEnteredChat(msg) => {
                 let mut frame = Frame::array();
                 frame.push_bulk(Frame::Bulk(Bytes::from_static(b"user_entered_chat")));
+                frame.push_bulk(Frame::Bulk(msg.name));
+                frame.push_bulk(Frame::Bulk(msg.msg));
+                frame
+            }
+            Self::UserLeftChat(msg) => {
+                let mut frame = Frame::array();
+                frame.push_bulk(Frame::Bulk(Bytes::from_static(b"user_left_chat")));
                 frame.push_bulk(Frame::Bulk(msg.name));
                 frame.push_bulk(Frame::Bulk(msg.msg));
                 frame
@@ -108,6 +117,25 @@ pub struct UserEnteredChat {
 }
 
 impl UserEnteredChat {
+    fn parse(mut parser: Parser) -> Result<Self> {
+        Ok(Self {
+            name: parser.next_bytes()?,
+            msg: parser.next_bytes()?,
+        })
+    }
+
+    pub fn new(msg: Bytes, name: Bytes) -> Self {
+        Self { msg, name }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct UserLeftChat {
+    pub msg: Bytes,
+    pub name: Bytes,
+}
+
+impl UserLeftChat {
     fn parse(mut parser: Parser) -> Result<Self> {
         Ok(Self {
             name: parser.next_bytes()?,

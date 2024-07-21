@@ -1,24 +1,16 @@
+use std::collections::HashSet;
 use std::future::Future;
 use std::time::SystemTime;
 
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use bytes::Bytes;
-use shared::connection::write_frame_into;
-use shared::message::UserEnteredChat;
-use shared::message::WelcomeMessage;
-use shared::message::WhoIsInChat;
-use tokio::io::AsyncRead;
-use tokio::io::AsyncWrite;
-use tokio::io::BufWriter;
-use tokio::net::TcpListener;
-use tokio::sync::broadcast;
-use tokio::sync::mpsc;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{broadcast, mpsc};
 
 extern crate shared;
 use shared::connection::Connection;
-use shared::message::Message;
+use shared::message::{Message, UserEnteredChat, UserLeftChat, WelcomeMessage, WhoIsInChat};
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -141,6 +133,9 @@ where
                             Message::UserEnteredChat(_) => {
                                 self.connection.write_frame(message.into_frame()).await?;
                             }
+                            Message::UserLeftChat(_) => {
+                                self.connection.write_frame(message.into_frame()).await?;
+                            }
                             Message::WhoIsInChat(_) => {
                                 self.connection.write_who_is_in_chat(message.into_frame()).await?;
                             }
@@ -192,9 +187,10 @@ where
                         // handling instead
                         self.client.as_mut().unwrap().increment_messages();
                     }
-                    Message::WelcomeMessage(_) => bail!("We are hijacked, aborting immediately"),
-                    Message::UserEnteredChat(_) => bail!("We are hijacked, aborting immediately"),
-                    Message::WhoIsInChat(_) => bail!("We are hijacked, aborting immediately"),
+                    Message::WelcomeMessage(_)
+                    | Message::UserEnteredChat(_)
+                    | Message::UserLeftChat(_)
+                    | Message::WhoIsInChat(_) => bail!("We are hijacked, aborting immediately"),
                 },
                 Err(e) => {
                     eprintln!("Protocol error: {}", e);
@@ -211,7 +207,7 @@ pub struct Server {
     shutdown_complete: mpsc::Sender<()>,
     client_status_reciever: mpsc::Receiver<Client>,
     clients_connected_cnt: u64,
-    clients_connected: Vec<Bytes>,
+    clients_connected: HashSet<Bytes>,
 }
 
 impl Server {
@@ -234,10 +230,10 @@ impl Server {
                                     format!("{} joined the chat!", client.name).into(),
                                     client.name.clone().into()
                                 )));
-                                self.clients_connected.push(client.name.into());
+                                self.clients_connected.insert(client.name.into());
                                 let _ = client_message_sender.send(
                                     Message::WhoIsInChat(WhoIsInChat::new(
-                                        self.clients_connected.clone()
+                                        Vec::from_iter(self.clients_connected.clone())
                                     ))
                                 );
                                 println!("Current clients connected: {:?}", self.clients_connected);
@@ -245,6 +241,16 @@ impl Server {
                             ClientStatus::Offline => {
                                 // TODO: send UserLeftChatMessages (not imlemented yet)
                                 self.clients_connected_cnt -= 1;
+                                self.clients_connected.remove(&Bytes::copy_from_slice(client.name.as_bytes()));
+                                let _ = client_message_sender.send(Message::UserLeftChat(UserLeftChat::new(
+                                    format!("{} left the chat!", client.name).into(),
+                                    client.name.clone().into()
+                                )));
+                                let _ = client_message_sender.send(
+                                    Message::WhoIsInChat(WhoIsInChat::new(
+                                        Vec::from_iter(self.clients_connected.clone())
+                                    ))
+                                );
                                 println!("Client {:?} disconnected", client);
                             }
                         }
@@ -256,29 +262,43 @@ impl Server {
             };
 
             println!("Accepted connection from {}", address);
-            let (read_half, write_half) = socket.into_split();
-            let mut handler = ConnectionHandler::new(
-                Connection::new(read_half, write_half),
-                Shutdown::new(notify_shutdown.subscribe()),
+            Self::spawn_handler_thread(
+                socket,
+                notify_shutdown.subscribe(),
                 client_status_sender.clone(),
                 client_message_sender.clone(),
-                client_message_sender.subscribe(),
-            );
-
-            tokio::spawn(async move {
-                if let Err(e) = handler.handle().await {
-                    eprintln!("An error occured: {}", e);
-                    let _ = handler
-                        .client_status_sender
-                        .send(handler.client.take().unwrap().mark_offline())
-                        .await
-                        .map_err(|e| {
-                            eprintln!("Couldn't let the server know a client got disconnected");
-                            e
-                        });
-                }
-            });
+            )
         }
+    }
+
+    fn spawn_handler_thread(
+        socket: TcpStream,
+        notify_shutdown_reciever: broadcast::Receiver<()>,
+        client_status_sender: mpsc::Sender<Client>,
+        client_message_sender: broadcast::Sender<Message>,
+    ) {
+        let (read_half, write_half) = socket.into_split();
+        let mut handler = ConnectionHandler::new(
+            Connection::new(read_half, write_half),
+            Shutdown::new(notify_shutdown_reciever),
+            client_status_sender,
+            client_message_sender.clone(),
+            client_message_sender.subscribe(),
+        );
+
+        tokio::spawn(async move {
+            if let Err(e) = handler.handle().await {
+                eprintln!("An error occured: {}", e);
+                let _ = handler
+                    .client_status_sender
+                    .send(handler.client.take().unwrap().mark_offline())
+                    .await
+                    .map_err(|e| {
+                        eprintln!("Couldn't let the server know a client got disconnected");
+                        e
+                    });
+            }
+        });
     }
 }
 
@@ -295,7 +315,7 @@ pub async fn run(listener: TcpListener, shutdown_sig: impl Future) -> Result<()>
         shutdown_complete,
         clients_connected_cnt: 0,
         client_status_reciever,
-        clients_connected: Vec::new(),
+        clients_connected: HashSet::new(),
     };
 
     tokio::select! {
