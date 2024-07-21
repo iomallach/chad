@@ -7,11 +7,11 @@ use bytes::Bytes;
 use shared::message::Message;
 use shared::{connection::Connection, message::ChatMessage};
 use tokio::net::TcpStream;
+use tokio::sync::broadcast;
 use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     select,
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    sync::oneshot::Sender,
     time::interval,
 };
 
@@ -27,7 +27,7 @@ impl StateManager {
     pub async fn state_loop(
         &mut self,
         mut action_rx: UnboundedReceiver<Action>,
-        termination_tx: Sender<()>,
+        termination_tx: broadcast::Sender<()>,
     ) -> Result<()> {
         let mut connection: Option<Connection<OwnedWriteHalf, OwnedReadHalf>> = None;
         let mut state = State::default();
