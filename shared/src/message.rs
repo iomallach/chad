@@ -25,7 +25,7 @@ impl Message {
         match &msg_kind[..] {
             b"login" => Ok(Self::Login(Login::parse(parser)?)),
             b"logout" => Ok(Self::Logout(Logout::parse(parser)?)),
-            b"chat_message" => Ok(Self::ChatMessage(ChatMessage::parse_new_message(parser)?)),
+            b"chat_message" => Ok(Self::ChatMessage(ChatMessage::parse(parser)?)),
             b"welcome_message" => Ok(Self::WelcomeMessage(WelcomeMessage::parse(parser)?)),
             b"user_entered_chat" => Ok(Self::UserEnteredChat(UserEnteredChat::parse(parser)?)),
             b"user_left_chat" => Ok(Self::UserLeftChat(UserLeftChat::parse(parser)?)),
@@ -54,6 +54,7 @@ impl Message {
                 frame.push_bulk(Frame::Bulk(Bytes::from_static(b"chat_message")));
                 frame.push_bulk(Frame::Bulk(msg.name));
                 frame.push_bulk(Frame::Bulk(msg.msg));
+                frame.push_bulk(Frame::Bulk(msg.sent_at));
                 frame
             }
             Self::WelcomeMessage(msg) => {
@@ -166,7 +167,11 @@ impl WelcomeMessage {
         Self {
             msg,
             sent_at: Bytes::copy_from_slice(
-                chrono::offset::Local::now().time().to_string().as_bytes(),
+                chrono::offset::Local::now()
+                    .time()
+                    .format("%H:%M:%S")
+                    .to_string()
+                    .as_bytes(),
             ),
         }
     }
@@ -211,21 +216,26 @@ impl Logout {
 #[derive(Clone, Debug)]
 pub struct ChatMessage {
     pub name: Bytes,
-    pub sent_at: Option<chrono::DateTime<chrono::Local>>,
+    pub sent_at: Bytes,
     pub msg: Bytes,
 }
 
 impl ChatMessage {
-    fn parse_new_message(mut parser: Parser) -> Result<Self> {
+    fn parse(mut parser: Parser) -> Result<Self> {
         let name = parser.next_bytes()?;
         let msg = parser.next_bytes()?;
-        let sent_at = Some(chrono::offset::Local::now());
+        let sent_at = parser.next_bytes()?;
 
         Ok(Self { name, sent_at, msg })
     }
 
-    pub fn new(name: Bytes, sent_at: Option<chrono::DateTime<chrono::Local>>, msg: Bytes) -> Self {
-        Self { name, sent_at, msg }
+    pub fn new(name: Bytes, sent_at: chrono::DateTime<chrono::Local>, msg: Bytes) -> Self {
+        let sent_at_fmt = sent_at.time().format("%H:%M:%S").to_string();
+        Self {
+            name,
+            sent_at: sent_at_fmt.into(),
+            msg,
+        }
     }
 }
 

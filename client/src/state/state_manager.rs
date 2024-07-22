@@ -59,7 +59,7 @@ impl StateManager {
                                 shared::message::Message::ChatMessage(
                                     ChatMessage::new(
                                         state.login_name.clone().expect("Empty login name").into(),
-                                        None,
+                                        chrono::Local::now(),
                                         message.into(),
                                     )
                                 ).into_frame()

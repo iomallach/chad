@@ -32,10 +32,10 @@ impl State {
     pub(crate) fn handle_server_message(&mut self, server_message: Message) {
         match server_message {
             Message::ChatMessage(m) => {
-                let sent_at = m.sent_at.expect("Message DTTM gone").time().to_string();
                 let chat_message = ChatMessage::new(
                     String::from_utf8(m.name.to_vec()).expect("Couldn't decode the name in utf8"),
-                    sent_at,
+                    String::from_utf8(m.sent_at.to_vec())
+                        .expect("Couldn't decode the time in utf8"),
                     String::from_utf8(m.msg.to_vec()).expect("Couldn't decode the message in utf8"),
                     USER_ICON.to_string(),
                 );
