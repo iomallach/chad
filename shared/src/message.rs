@@ -203,9 +203,7 @@ pub struct Logout {
 
 impl Logout {
     fn parse(mut parser: Parser) -> Result<Self> {
-        Ok(Self {
-            name: parser.next_bytes()?,
-        })
+        Ok(Self::new(parser.next_bytes()?))
     }
 
     fn new(name: Bytes) -> Self {

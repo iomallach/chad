@@ -71,7 +71,7 @@ impl StateManager {
                             break;
                         },
                     },
-                    _ = ticker.tick() => {},
+                    _ = ticker.tick() => state.tick_timer(0.5),
                 }
             } else {
                 select! {

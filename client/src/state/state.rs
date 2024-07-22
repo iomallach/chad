@@ -23,6 +23,7 @@ pub(crate) struct State {
     pub(crate) online_users: HashSet<String>,
     pub(crate) connection_status: ConnectionStatus,
     pub(crate) messages_sent: u64,
+    pub(crate) timer: f64,
 }
 
 // TODO: perhaps it makes sense to return a Result from here
@@ -86,5 +87,8 @@ impl State {
                 unreachable!("Client must not receive server-side events")
             }
         }
+    }
+    pub(crate) fn tick_timer(&mut self, tick: f64) {
+        self.timer += tick;
     }
 }

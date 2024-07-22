@@ -23,6 +23,7 @@ struct ChatPageState {
     messages_sent: u64,
     chat_messages: ChatLog,
     online_users: HashSet<String>,
+    time_online: u64,
 }
 
 impl From<State> for ChatPageState {
@@ -32,6 +33,7 @@ impl From<State> for ChatPageState {
             messages_sent: value.messages_sent,
             chat_messages: value.chat_messages,
             online_users: value.online_users,
+            time_online: value.timer.round() as u64,
         }
     }
 }
@@ -141,7 +143,12 @@ impl Widget for ChatPage {
             let user_name_line =
                 Line::from(self.page_state.login_name.as_ref().unwrap().to_string());
             let messages_sent = Line::from(format!("Sent: {}", self.page_state.messages_sent));
-            vec![ListItem::new(user_name_line), ListItem::new(messages_sent)]
+            let time_online = Line::from(format!("Online for {}s", self.page_state.time_online));
+            vec![
+                ListItem::new(user_name_line),
+                ListItem::new(messages_sent),
+                ListItem::new(time_online),
+            ]
         };
 
         frame.render_widget(List::new(chat_lines).block(chat_block), chat_area);
